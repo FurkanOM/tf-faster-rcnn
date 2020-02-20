@@ -12,7 +12,7 @@ if args.handle_gpu:
 
 batch_size = 2
 epochs = 100
-rpn_load_weights = True
+rpn_load_weights = False
 frcnn_load_weights = False
 hyper_params = {
     "anchor_ratios": [0.5, 1, 2],
@@ -57,7 +57,7 @@ VOC_train_data = VOC_train_data.map(lambda x : helpers.preprocessing(x, max_heig
 VOC_val_data = VOC_val_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
 
 padded_shapes = ([None, None, None], [None, None], [None,])
-padding_values = (tf.constant(0, tf.float32), tf.constant(-1, tf.float32), tf.constant(-1, tf.int32))
+padding_values = (tf.constant(0, tf.uint8), tf.constant(-1, tf.float32), tf.constant(-1, tf.int32))
 VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 

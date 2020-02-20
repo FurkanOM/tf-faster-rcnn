@@ -28,9 +28,8 @@ def preprocessing(image_data, max_height, max_width):
     padding = get_padding(img_shape[0], img_shape[1], max_height, max_width)
     gt_boxes = update_gt_boxes(image_data["objects"]["bbox"], img_shape[0], img_shape[1], padding)
     img = get_padded_img(img, max_height, max_width)
-    img_float32 = tf.image.convert_image_dtype(img, dtype=tf.float32)
     gt_labels = tf.cast(image_data["objects"]["label"], tf.int32)
-    return img_float32, gt_boxes, gt_labels
+    return img, gt_boxes, gt_labels
 
 def get_image_params(batch_img, stride):
     img_shape = tf.shape(batch_img)
