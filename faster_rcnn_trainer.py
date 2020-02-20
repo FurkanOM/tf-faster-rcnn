@@ -61,17 +61,17 @@ padding_values = (tf.constant(0, tf.uint8), tf.constant(-1, tf.float32), tf.cons
 VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
-rpn_train_feed = faster_rcnn.generator(VOC_train_data, hyper_params, preprocess_input)
-rpn_val_feed = faster_rcnn.generator(VOC_val_data, hyper_params, preprocess_input)
+frcnn_train_feed = faster_rcnn.generator(VOC_train_data, hyper_params, preprocess_input)
+frcnn_val_feed = faster_rcnn.generator(VOC_val_data, hyper_params, preprocess_input)
 
 model_checkpoint = ModelCheckpoint(frcnn_model_path, save_best_only=True, save_weights_only=True, monitor="val_loss", mode="auto")
 early_stopping = EarlyStopping(monitor="val_loss", patience=20, verbose=0, mode="auto")
 
 step_size_train = VOC_train_data_len // batch_size
 step_size_val = VOC_val_data_len // batch_size
-frcnn_model.fit(rpn_train_feed,
+frcnn_model.fit(frcnn_train_feed,
                 steps_per_epoch=step_size_train,
-                validation_data=rpn_val_feed,
+                validation_data=frcnn_val_feed,
                 validation_steps=step_size_val,
                 epochs=epochs,
                 callbacks=[early_stopping, model_checkpoint])

@@ -66,8 +66,8 @@ def get_deltas_from_bboxes(bboxes, gt_boxes):
     gt_ctr_x = gt_boxes[:, :, 1] + 0.5 * gt_width
     gt_ctr_y = gt_boxes[:, :, 0] + 0.5 * gt_height
     #
-    bbox_width = tf.where(tf.equal(bbox_width, 0), tf.ones_like(bbox_width), bbox_width)
-    bbox_height = tf.where(tf.equal(bbox_height, 0), tf.ones_like(bbox_height), bbox_height)
+    bbox_width = tf.where(tf.equal(bbox_width, 0), 1e-5, bbox_width)
+    bbox_height = tf.where(tf.equal(bbox_height, 0), 1e-5, bbox_height)
     delta_x = tf.where(tf.equal(gt_width, 0), tf.zeros_like(bbox_width), tf.truediv((gt_ctr_x - bbox_ctr_x), bbox_width))
     delta_y = tf.where(tf.equal(gt_height, 0), tf.zeros_like(bbox_height), tf.truediv((gt_ctr_y - bbox_ctr_y), bbox_height))
     delta_w = tf.where(tf.equal(gt_width, 0), tf.zeros_like(bbox_width), tf.math.log(gt_width / bbox_width))
