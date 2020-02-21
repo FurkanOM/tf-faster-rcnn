@@ -15,6 +15,11 @@ VOC = {
     "max_width": 500,
 }
 
+def get_padded_batch_params():
+    padded_shapes = ([None, None, None], [None, None], [None,])
+    padding_values = (tf.constant(0, tf.uint8), tf.constant(-1, tf.float32), tf.constant(-1, tf.int32))
+    return padded_shapes, padding_values
+
 def get_VOC_data(split):
     assert split in ["train", "validation", "test"]
     dataset, info = tfds.load("voc", split=split, with_info=True)
@@ -36,6 +41,33 @@ def get_image_params(batch_img, stride):
     height, width = img_shape[1], img_shape[2]
     output_height, output_width = height // stride, width // stride
     return height, width, output_height, output_width
+
+def non_max_suppression(pred_bboxes, pred_labels, hyper_params):
+    nms_bboxes, nms_scores, nms_labels, valid_detections = tf.image.combined_non_max_suppression(
+        pred_bboxes,
+        pred_labels,
+        hyper_params["nms_topn"],
+        hyper_params["nms_topn"]
+    )
+    return nms_bboxes
+
+def get_bboxes_from_deltas(anchors, deltas):
+    all_anc_width = anchors[:, :, 3] - anchors[:, :, 1]
+    all_anc_height = anchors[:, :, 2] - anchors[:, :, 0]
+    all_anc_ctr_x = anchors[:, :, 1] + 0.5 * all_anc_width
+    all_anc_ctr_y = anchors[:, :, 0] + 0.5 * all_anc_height
+    #
+    all_bbox_width = tf.exp(deltas[:, :, 3]) * all_anc_width
+    all_bbox_height = tf.exp(deltas[:, :, 2]) * all_anc_height
+    all_bbox_ctr_x = (deltas[:, :, 1] * all_anc_width) + all_anc_ctr_x
+    all_bbox_ctr_y = (deltas[:, :, 0] * all_anc_height) + all_anc_ctr_y
+    #
+    y1 = all_bbox_ctr_y - (0.5 * all_bbox_height)
+    x1 = all_bbox_ctr_x - (0.5 * all_bbox_width)
+    y2 = all_bbox_height + y1
+    x2 = all_bbox_width + x1
+    #
+    return tf.stack([y1, x1, y2, x2], axis=2)
 
 def generate_iou_map(bboxes, gt_boxes):
     bbox_y1, bbox_x1, bbox_y2, bbox_x2 = tf.split(bboxes, 4, axis=1)

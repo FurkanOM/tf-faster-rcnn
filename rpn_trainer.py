@@ -43,8 +43,7 @@ max_height, max_width = helpers.VOC["max_height"], helpers.VOC["max_width"]
 VOC_train_data = VOC_train_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
 VOC_val_data = VOC_val_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
 
-padded_shapes = ([None, None, None], [None, None], [None,])
-padding_values = (tf.constant(0, tf.uint8), tf.constant(-1, tf.float32), tf.constant(-1, tf.int32))
+padded_shapes, padding_values = helpers.get_padded_batch_params()
 VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
