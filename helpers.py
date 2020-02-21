@@ -15,6 +15,24 @@ VOC = {
     "max_width": 500,
 }
 
+def get_hyper_params(**kwargs):
+    hyper_params = {
+        "anchor_ratios": [0.5, 1, 2],
+        "anchor_scales": [16, 32, 64, 128, 256],
+        "stride": 32,
+        "nms_topn": 300,
+        "total_pos_bboxes": 64,
+        "total_neg_bboxes": 64,
+        "pooling_size": (7, 7),
+    }
+    for key, value in kwargs.items():
+        if key in hyper_params and value:
+            hyper_params[key] = value
+    #
+    hyper_params["anchor_count"] = len(hyper_params["anchor_ratios"]) * len(hyper_params["anchor_scales"])
+    hyper_params["roi_size"] = hyper_params["total_pos_bboxes"] + hyper_params["total_neg_bboxes"]
+    return hyper_params
+
 def get_padded_batch_params():
     padded_shapes = ([None, None, None], [None, None], [None,])
     padding_values = (tf.constant(0, tf.uint8), tf.constant(-1, tf.float32), tf.constant(-1, tf.int32))

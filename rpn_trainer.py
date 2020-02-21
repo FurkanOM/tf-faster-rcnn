@@ -12,15 +12,7 @@ if args.handle_gpu:
 batch_size = 2
 epochs = 100
 load_weights = False
-hyper_params = {
-    "anchor_ratios": [0.5, 1, 2],
-    "anchor_scales": [16, 32, 64, 128, 256],
-    "stride": 32,
-    "nms_topn": 300,
-    "total_pos_bboxes": 64,
-    "total_neg_bboxes": 64,
-}
-hyper_params["anchor_count"] = len(hyper_params["anchor_ratios"]) * len(hyper_params["anchor_scales"])
+hyper_params = helpers.get_hyper_params()
 
 base_model = VGG16(include_top=False, weights="imagenet")
 if hyper_params["stride"] == 16:

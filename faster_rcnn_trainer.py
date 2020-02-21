@@ -14,18 +14,7 @@ batch_size = 2
 epochs = 100
 rpn_load_weights = False
 frcnn_load_weights = False
-hyper_params = {
-    "anchor_ratios": [0.5, 1, 2],
-    "anchor_scales": [16, 32, 64, 128, 256],
-    "stride": 32,
-    "nms_topn": 300,
-    "total_pos_bboxes": 64,
-    "total_neg_bboxes": 64,
-    "pooling_size": (7, 7),
-}
-hyper_params["anchor_count"] = len(hyper_params["anchor_ratios"]) * len(hyper_params["anchor_scales"])
-# Total roi size => pos + neg count
-hyper_params["roi_size"] = hyper_params["total_pos_bboxes"] * 2
+hyper_params = helpers.get_hyper_params()
 
 VOC_train_data, VOC_train_data_len, hyper_params["total_labels"] = helpers.get_VOC_data("train")
 VOC_val_data, VOC_val_data_len, _ = helpers.get_VOC_data("validation")
