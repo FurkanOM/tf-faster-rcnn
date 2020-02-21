@@ -40,22 +40,25 @@ class RoIBBox(Layer):
         total_neg_bboxes = self.hyper_params["total_neg_bboxes"]
         total_bboxes = total_pos_bboxes + total_neg_bboxes
         anchors_shape = tf.shape(anchors)
-        batch_size, anchor_row_size = anchors_shape[0], anchors_shape[1]
-        rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, anchor_row_size, 4))
-        rpn_labels = tf.reshape(rpn_labels, (batch_size, anchor_row_size, 1))
+        batch_size, total_anchors = anchors_shape[0], anchors_shape[1]
+        rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
+        rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors, 1))
         #
         rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
-        rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, anchor_row_size, 1, 4))
+        rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, total_anchors, 1, 4))
         nms_bboxes = helpers.non_max_suppression(rpn_bboxes, rpn_labels, self.hyper_params)
-        # Like in the RPN we calculate iou values
-        # then pos-neg anchors / bboxes for non max suppressed bboxes using these values
+        ################################################################################################################
+        # This method could be updated for batch operations
+        # But not working for now because of different shapes of gt_boxes and gt_labels
         batch_total_pos_bboxes = tf.tile([total_pos_bboxes], (batch_size,))
         batch_total_neg_bboxes = tf.tile([total_neg_bboxes], (batch_size,))
         bbox_indices, gt_box_indices = tf.map_fn(helpers.get_selected_indices,
                                                 (nms_bboxes, gt_boxes, batch_total_pos_bboxes, batch_total_neg_bboxes),
                                                 dtype=(tf.int32, tf.int32), swap_memory=True)
-        ################################################################
-        roi_bboxes = tf.gather(nms_bboxes, bbox_indices, batch_dims=1)
+        ################################################################################################################
+        pos_roi_bboxes = tf.gather(nms_bboxes, bbox_indices[:, :total_pos_bboxes], batch_dims=1)
+        neg_roi_bboxes = tf.zeros((batch_size, total_neg_bboxes, 4), tf.float32)
+        roi_bboxes = tf.concat([pos_roi_bboxes, neg_roi_bboxes], axis=1)
         return tf.stop_gradient(roi_bboxes), tf.stop_gradient(gt_box_indices)
 
 class RoIDelta(Layer):

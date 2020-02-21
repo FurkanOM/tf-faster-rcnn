@@ -70,14 +70,17 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     img, gt_boxes, gt_labels = image_data
     batch_size = tf.shape(img)[0]
     input_img = input_processor(img)
-    stride, anchor_count, total_pos_bboxes, total_neg_bboxes = hyper_params["stride"], hyper_params["anchor_count"], hyper_params["total_pos_bboxes"], hyper_params["total_neg_bboxes"]
+    stride = hyper_params["stride"]
+    anchor_count = hyper_params["anchor_count"]
+    total_pos_bboxes = hyper_params["total_pos_bboxes"]
+    total_neg_bboxes = hyper_params["total_neg_bboxes"]
     total_bboxes = total_pos_bboxes + total_neg_bboxes
     img_params = helpers.get_image_params(img, stride)
     height, width, output_height, output_width = img_params
-    anchor_row_size = output_height * output_width * anchor_count
+    total_anchors = output_height * output_width * anchor_count
     anchors = generate_anchors(img_params, hyper_params)
     # We use same anchors for each batch so we multiplied anchors to the batch size
-    anchors = tf.reshape(tf.tile(anchors, (batch_size, 1)), (batch_size, anchor_row_size, 4))
+    anchors = tf.reshape(tf.tile(anchors, (batch_size, 1)), (batch_size, total_anchors, 4))
     if mode != "training":
         return input_img, anchors
     ################################################################################################################
@@ -102,7 +105,7 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     #
     bbox_deltas = helpers.get_deltas_from_bboxes(anchors, expanded_gt_boxes)
     #
-    bbox_labels = tf.negative(tf.ones((batch_size, anchor_row_size), tf.int32))
+    bbox_labels = tf.negative(tf.ones((batch_size, total_anchors), tf.int32))
     bbox_labels = tf.tensor_scatter_nd_update(bbox_labels, scatter_indices, gt_labels_map)
     #
     bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
