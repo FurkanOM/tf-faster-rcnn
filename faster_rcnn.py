@@ -21,9 +21,12 @@ def rpn_cls_loss(args):
 
 def reg_loss(args):
     y_true, y_pred = args
+    indices = tf.where(tf.not_equal(y_true, 0))
+    target = tf.gather_nd(y_true, indices)
+    output = tf.gather_nd(y_pred, indices)
     # # Same with the smooth l1 loss
     lf = tf.losses.Huber()
-    return lf(y_true, y_pred)
+    return lf(target, output)
 
 class RoIBBox(Layer):
     def __init__(self, hyper_params, **kwargs):

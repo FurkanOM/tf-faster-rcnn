@@ -38,9 +38,9 @@ def get_padded_batch_params():
     padding_values = (tf.constant(0, tf.uint8), tf.constant(-1, tf.float32), tf.constant(-1, tf.int32))
     return padded_shapes, padding_values
 
-def get_VOC_data(split):
+def get_VOC_data(split, data_dir="~/tensorflow_datasets"):
     assert split in ["train", "validation", "test"]
-    dataset, info = tfds.load("voc", split=split, with_info=True)
+    dataset, info = tfds.load("voc", split=split, data_dir=data_dir, with_info=True)
     total_labels = info.features["labels"].num_classes
     data_len = info.splits[split].num_examples
     return dataset, data_len, total_labels
