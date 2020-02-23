@@ -1,7 +1,6 @@
 import os
 import argparse
-from PIL import Image, ImageDraw
-import xml.etree.ElementTree as ET
+from PIL import Image, ImageFont, ImageDraw
 import tensorflow as tf
 import tensorflow_datasets as tfds
 import matplotlib.pyplot as plt
@@ -41,9 +40,13 @@ def get_padded_batch_params():
 def get_VOC_data(split, data_dir="~/tensorflow_datasets"):
     assert split in ["train", "validation", "test"]
     dataset, info = tfds.load("voc", split=split, data_dir=data_dir, with_info=True)
-    total_labels = info.features["labels"].num_classes
-    data_len = info.splits[split].num_examples
-    return dataset, data_len, total_labels
+    return dataset, info
+
+def get_total_item_size(info, split):
+    return info.splits[split].num_examples
+
+def get_labels(info):
+    return info.features["labels"].names
 
 def preprocessing(image_data, max_height, max_width):
     img = image_data["image"]
@@ -116,8 +119,8 @@ def get_deltas_from_bboxes(bboxes, gt_boxes):
     gt_ctr_x = gt_boxes[:, :, 1] + 0.5 * gt_width
     gt_ctr_y = gt_boxes[:, :, 0] + 0.5 * gt_height
     #
-    bbox_width = tf.where(tf.equal(bbox_width, 0), 1e-5, bbox_width)
-    bbox_height = tf.where(tf.equal(bbox_height, 0), 1e-5, bbox_height)
+    bbox_width = tf.where(tf.equal(bbox_width, 0), 1e-3, bbox_width)
+    bbox_height = tf.where(tf.equal(bbox_height, 0), 1e-3, bbox_height)
     delta_x = tf.where(tf.equal(gt_width, 0), tf.zeros_like(bbox_width), tf.truediv((gt_ctr_x - bbox_ctr_x), bbox_width))
     delta_y = tf.where(tf.equal(gt_height, 0), tf.zeros_like(bbox_height), tf.truediv((gt_ctr_y - bbox_ctr_y), bbox_height))
     delta_w = tf.where(tf.equal(gt_width, 0), tf.zeros_like(bbox_width), tf.math.log(gt_width / bbox_width))
@@ -171,6 +174,14 @@ def normalize_bboxes(bboxes, height, width):
     new_bboxes[:, 1] = bboxes[:, 1] / width
     new_bboxes[:, 2] = bboxes[:, 2] / height
     new_bboxes[:, 3] = bboxes[:, 3] / width
+    return new_bboxes
+
+def denormalize_bboxes(bboxes, height, width):
+    new_bboxes = np.zeros(bboxes.shape, dtype=np.float32)
+    new_bboxes[:, 0] = np.round(bboxes[:, 0] * height)
+    new_bboxes[:, 1] = np.round(bboxes[:, 1] * width)
+    new_bboxes[:, 2] = np.round(bboxes[:, 2] * height)
+    new_bboxes[:, 3] = np.round(bboxes[:, 3] * width)
     return new_bboxes
 
 def update_gt_boxes(gt_boxes, img_height, img_width, padding):
@@ -230,6 +241,29 @@ def draw_bboxes(img, bboxes):
     )
     plt.figure()
     plt.imshow(img_with_bounding_boxes[0])
+    plt.show()
+
+def draw_bboxes_with_labels(img, bboxes, label_indices, probs, labels):
+    colors = []
+    for i in range(len(labels)):
+        colors.append(tuple(np.random.choice(range(256), size=4)))
+    image = tf.keras.preprocessing.image.array_to_img(img[0])
+    width, height = image.size
+    draw = ImageDraw.Draw(image)
+    denormalized_bboxes = denormalize_bboxes(bboxes[0], height, width)
+    for index, bbox in enumerate(denormalized_bboxes):
+        width = bbox[3] - bbox[1]
+        height = bbox[2] - bbox[0]
+        if width <= 0 or height <= 0:
+            continue
+        label_index = label_indices[0][index]
+        color = colors[label_index]
+        label_text = "{} {:0.3f}".format(labels[label_index], probs[0][index])
+        draw.text((bbox[1]+4, bbox[0]+2), label_text, fill=color)
+        draw.rectangle((bbox[1],bbox[0],bbox[3],bbox[2]), outline=color, width=3)
+    #
+    plt.figure()
+    plt.imshow(image)
     plt.show()
 
 # It take images as numpy arrays and return max height, max width values

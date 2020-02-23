@@ -144,23 +144,24 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
     roi_bboxes, gt_box_indices = RoIBBox(hyper_params, trainable=False, name="roi_bboxes")(
                                         [rpn_reg_predictions, rpn_cls_predictions, input_anchors, input_gt_boxes])
     #
-    if mode == "training":
-        input_gt_labels = Input(shape=(None, ), name="input_gt_labels", dtype=tf.int32)
-        frcnn_reg_actuals, frcnn_cls_actuals = RoIDelta(hyper_params, trainable=False, name="roi_deltas")(
-                                                        [roi_bboxes, input_gt_boxes, input_gt_labels, gt_box_indices])
-    #
     roi_pooled = RoIPooling(hyper_params, name="roi_pooling")([base_model.output, roi_bboxes])
     #
     output = TimeDistributed(Flatten(), name="frcnn_flatten")(roi_pooled)
     output = TimeDistributed(Dense(4096, activation="relu"), name="frcnn_fc1")(output)
-    output = TimeDistributed(BatchNormalization(), name="frcnn_batch_norm")(output)
-    output = TimeDistributed(Dropout(0.2), name="frcnn_dropout")(output)
+    output = TimeDistributed(BatchNormalization(), name="frcnn_batch_norm1")(output)
+    output = TimeDistributed(Dropout(0.2), name="frcnn_dropout1")(output)
+    output = TimeDistributed(Dense(2048, activation="relu"), name="frcnn_fc2")(output)
+    output = TimeDistributed(BatchNormalization(), name="frcnn_batch_norm2")(output)
+    output = TimeDistributed(Dropout(0.2), name="frcnn_dropout2")(output)
     frcnn_cls_predictions = TimeDistributed(Dense(hyper_params["total_labels"], activation="softmax"), name="frcnn_cls")(output)
     frcnn_reg_predictions = TimeDistributed(Dense(hyper_params["total_labels"] * 4, activation="linear"), name="frcnn_reg")(output)
     #
     if mode == "training":
         rpn_cls_actuals = Input(shape=(None, None, hyper_params["anchor_count"]), name="input_rpn_cls_actuals", dtype=tf.int32)
         rpn_reg_actuals = Input(shape=(None, None, hyper_params["anchor_count"] * 4), name="input_rpn_reg_actuals", dtype=tf.float32)
+        input_gt_labels = Input(shape=(None, ), name="input_gt_labels", dtype=tf.int32)
+        frcnn_reg_actuals, frcnn_cls_actuals = RoIDelta(hyper_params, trainable=False, name="roi_deltas")(
+                                                        [roi_bboxes, input_gt_boxes, input_gt_labels, gt_box_indices])
         #
         loss_names = ["rpn_reg_loss", "rpn_cls_loss", "frcnn_reg_loss", "frcnn_cls_loss"]
         rpn_reg_loss_layer = Lambda(reg_loss, name=loss_names[0])([rpn_reg_actuals, rpn_reg_predictions])

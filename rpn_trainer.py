@@ -9,8 +9,9 @@ args = helpers.handle_args()
 if args.handle_gpu:
     helpers.handle_gpu_compatibility()
 
-batch_size = 2
-epochs = 100
+train_batch_size = 2
+val_batch_size = 4
+epochs = 50
 load_weights = False
 hyper_params = helpers.get_hyper_params()
 
@@ -22,12 +23,17 @@ model_path = rpn.get_model_path(hyper_params["stride"])
 rpn_model = rpn.get_model(base_model, hyper_params)
 if load_weights:
     rpn_model.load_weights(model_path)
-rpn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.00001),
+rpn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                   loss=[rpn.reg_loss, rpn.cls_loss],
                   loss_weights=[10., 1.])
 
-VOC_train_data, VOC_train_data_len, _ = helpers.get_VOC_data("train")
-VOC_val_data, VOC_val_data_len, _ = helpers.get_VOC_data("validation")
+VOC_train_data, VOC_info = helpers.get_VOC_data("train")
+VOC_val_data, _ = helpers.get_VOC_data("validation")
+VOC_train_total_items = helpers.get_total_item_size(VOC_info, "train")
+VOC_val_total_items = helpers.get_total_item_size(VOC_info, "validation")
+labels = helpers.get_labels(VOC_info)
+# We add 1 class for background
+hyper_params["total_labels"] = len(labels) + 1
 
 # If you want to use different dataset and don't know max height and width values
 # You can use calculate_max_height_width method in helpers
@@ -36,17 +42,17 @@ VOC_train_data = VOC_train_data.map(lambda x : helpers.preprocessing(x, max_heig
 VOC_val_data = VOC_val_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
 
 padded_shapes, padding_values = helpers.get_padded_batch_params()
-VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
-VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+VOC_train_data = VOC_train_data.padded_batch(train_batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+VOC_val_data = VOC_val_data.padded_batch(val_batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
 rpn_train_feed = rpn.generator(VOC_train_data, hyper_params, preprocess_input)
 rpn_val_feed = rpn.generator(VOC_val_data, hyper_params, preprocess_input)
 
 model_checkpoint = ModelCheckpoint(model_path, save_best_only=True, save_weights_only=True, monitor="val_loss", mode="auto")
-early_stopping = EarlyStopping(monitor="val_loss", patience=20, verbose=0, mode="auto")
+early_stopping = EarlyStopping(monitor="val_loss", patience=5, verbose=0, mode="auto")
 
-step_size_train = VOC_train_data_len // batch_size
-step_size_val = VOC_val_data_len // batch_size
+step_size_train = VOC_train_total_items // train_batch_size
+step_size_val = VOC_val_total_items // val_batch_size
 rpn_model.fit(rpn_train_feed,
               steps_per_epoch=step_size_train,
               validation_data=rpn_val_feed,
