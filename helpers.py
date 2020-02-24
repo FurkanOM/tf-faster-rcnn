@@ -247,20 +247,21 @@ def draw_bboxes_with_labels(img, bboxes, label_indices, probs, labels):
     colors = []
     for i in range(len(labels)):
         colors.append(tuple(np.random.choice(range(256), size=4)))
-    image = tf.keras.preprocessing.image.array_to_img(img[0])
+    image = tf.keras.preprocessing.image.array_to_img(img)
     width, height = image.size
     draw = ImageDraw.Draw(image)
-    denormalized_bboxes = denormalize_bboxes(bboxes[0], height, width)
+    denormalized_bboxes = denormalize_bboxes(bboxes, height, width)
     for index, bbox in enumerate(denormalized_bboxes):
-        width = bbox[3] - bbox[1]
-        height = bbox[2] - bbox[0]
+        y1, x1, y2, x2 = np.split(bbox, 4)
+        width = x2 - x1
+        height = y2 - y1
         if width <= 0 or height <= 0:
             continue
-        label_index = label_indices[0][index]
+        label_index = int(label_indices[index])
         color = colors[label_index]
-        label_text = "{} {:0.3f}".format(labels[label_index], probs[0][index])
-        draw.text((bbox[1]+4, bbox[0]+2), label_text, fill=color)
-        draw.rectangle((bbox[1],bbox[0],bbox[3],bbox[2]), outline=color, width=3)
+        label_text = "{0} {1:0.3f}".format(labels[label_index], probs[index])
+        draw.text((x1 + 4, y1 + 2), label_text, fill=color)
+        draw.rectangle((x1, y1, x2, y2), outline=color, width=3)
     #
     plt.figure()
     plt.imshow(image)
