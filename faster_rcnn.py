@@ -33,6 +33,11 @@ class RoIBBox(Layer):
         super(RoIBBox, self).__init__(**kwargs)
         self.hyper_params = hyper_params
 
+    def get_config(self):
+        config = super(RoIBBox, self).get_config()
+        config.update({"hyper_params": self.hyper_params})
+        return config
+
     def call(self, inputs):
         rpn_bbox_deltas = inputs[0]
         rpn_labels = inputs[1]
@@ -55,11 +60,11 @@ class RoIBBox(Layer):
         # But not working for now because of different shapes of gt_boxes and gt_labels
         batch_total_pos_bboxes = tf.tile([total_pos_bboxes], (batch_size,))
         batch_total_neg_bboxes = tf.tile([total_neg_bboxes], (batch_size,))
-        bbox_indices, gt_box_indices = tf.map_fn(helpers.get_selected_indices,
+        pos_bbox_indices, neg_bbox_indices, gt_box_indices = tf.map_fn(helpers.get_selected_indices,
                                                 (nms_bboxes, gt_boxes, batch_total_pos_bboxes, batch_total_neg_bboxes),
-                                                dtype=(tf.int32, tf.int32), swap_memory=True)
+                                                dtype=(tf.int32, tf.int32, tf.int32), swap_memory=True)
         ################################################################################################################
-        pos_roi_bboxes = tf.gather(nms_bboxes, bbox_indices[:, :total_pos_bboxes], batch_dims=1)
+        pos_roi_bboxes = tf.gather(nms_bboxes, pos_bbox_indices, batch_dims=1)
         neg_roi_bboxes = tf.zeros((batch_size, total_neg_bboxes, 4), tf.float32)
         roi_bboxes = tf.concat([pos_roi_bboxes, neg_roi_bboxes], axis=1)
         return tf.stop_gradient(roi_bboxes), tf.stop_gradient(gt_box_indices)
@@ -68,6 +73,11 @@ class RoIDelta(Layer):
     def __init__(self, hyper_params, **kwargs):
         super(RoIDelta, self).__init__(**kwargs)
         self.hyper_params = hyper_params
+
+    def get_config(self):
+        config = super(RoIDelta, self).get_config()
+        config.update({"hyper_params": self.hyper_params})
+        return config
 
     def call(self, inputs):
         roi_bboxes = inputs[0]
@@ -102,6 +112,11 @@ class RoIPooling(Layer):
     def __init__(self, hyper_params, **kwargs):
         super(RoIPooling, self).__init__(**kwargs)
         self.hyper_params = hyper_params
+
+    def get_config(self):
+        config = super(RoIPooling, self).get_config()
+        config.update({"hyper_params": self.hyper_params})
+        return config
 
     def call(self, inputs):
         feature_map = inputs[0]
@@ -141,7 +156,7 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
     input_anchors = Input(shape=(None, 4), name="input_anchors", dtype=tf.float32)
     input_gt_boxes = Input(shape=(None, 4), name="input_gt_boxes", dtype=tf.float32)
     #
-    roi_bboxes, gt_box_indices = RoIBBox(hyper_params, trainable=False, name="roi_bboxes")(
+    roi_bboxes, gt_box_indices = RoIBBox(hyper_params, name="roi_bboxes")(
                                         [rpn_reg_predictions, rpn_cls_predictions, input_anchors, input_gt_boxes])
     #
     roi_pooled = RoIPooling(hyper_params, name="roi_pooling")([base_model.output, roi_bboxes])
@@ -160,7 +175,7 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
         rpn_cls_actuals = Input(shape=(None, None, hyper_params["anchor_count"]), name="input_rpn_cls_actuals", dtype=tf.int32)
         rpn_reg_actuals = Input(shape=(None, None, hyper_params["anchor_count"] * 4), name="input_rpn_reg_actuals", dtype=tf.float32)
         input_gt_labels = Input(shape=(None, ), name="input_gt_labels", dtype=tf.int32)
-        frcnn_reg_actuals, frcnn_cls_actuals = RoIDelta(hyper_params, trainable=False, name="roi_deltas")(
+        frcnn_reg_actuals, frcnn_cls_actuals = RoIDelta(hyper_params, name="roi_deltas")(
                                                         [roi_bboxes, input_gt_boxes, input_gt_labels, gt_box_indices])
         #
         loss_names = ["rpn_reg_loss", "rpn_cls_loss", "frcnn_reg_loss", "frcnn_cls_loss"]
