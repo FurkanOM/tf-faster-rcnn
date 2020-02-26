@@ -54,7 +54,9 @@ class RoIBBox(Layer):
         #
         rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
         rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, total_anchors, 1, 4))
-        nms_bboxes = helpers.non_max_suppression(rpn_bboxes, rpn_labels, self.hyper_params)
+        nms_bboxes, _, _, _ = helpers.non_max_suppression(rpn_bboxes, rpn_labels,
+                                                          max_output_size_per_class=self.hyper_params["nms_topn"],
+                                                          max_total_size=self.hyper_params["nms_topn"])
         ################################################################################################################
         # This method could be updated for batch operations
         # But not working for now because of different shapes of gt_boxes and gt_labels
@@ -141,6 +143,27 @@ class RoIPooling(Layer):
         )
         final_pooling_feature_map = tf.reshape(pooling_feature_map, (batch_size, total_bboxes, pooling_feature_map.shape[1], pooling_feature_map.shape[2], pooling_feature_map.shape[3]))
         return final_pooling_feature_map
+
+def get_valid_predictions(roi_bboxes, frcnn_delta_pred, frcnn_label_pred, total_labels):
+    pred_labels_map = tf.argmax(frcnn_label_pred, 2, output_type=tf.int32)
+    #
+    valid_label_indices = tf.where(tf.not_equal(pred_labels_map, total_labels-1))
+    total_bboxes = tf.shape(valid_label_indices)[0]
+    #
+    valid_roi_bboxes = tf.gather_nd(roi_bboxes, valid_label_indices)
+    valid_deltas = tf.gather_nd(frcnn_delta_pred, valid_label_indices)
+    valid_deltas = tf.reshape(valid_deltas, (total_bboxes, total_labels, 4))
+    valid_labels = tf.gather_nd(frcnn_label_pred, valid_label_indices)
+    #
+    valid_labels_map = tf.gather_nd(pred_labels_map, valid_label_indices)
+    #
+    flatted_bbox_indices = tf.reshape(tf.range(total_bboxes), (-1, 1))
+    flatted_labels_indices = tf.reshape(valid_labels_map, (-1, 1))
+    scatter_indices = tf.concat([flatted_bbox_indices, flatted_labels_indices], 1)
+    scatter_indices = tf.reshape(scatter_indices, (total_bboxes, 2))
+    valid_roi_bboxes = tf.scatter_nd(scatter_indices, valid_roi_bboxes, (total_bboxes, total_labels, 4))
+    pred_bboxes = helpers.get_bboxes_from_deltas(valid_roi_bboxes, valid_deltas)
+    return tf.expand_dims(pred_bboxes, 0), tf.expand_dims(valid_labels, 0)
 
 def generator(dataset, hyper_params, input_processor):
     while True:

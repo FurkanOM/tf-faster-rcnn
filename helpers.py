@@ -94,14 +94,12 @@ def get_image_params(batch_img, stride):
     output_height, output_width = height // stride, width // stride
     return height, width, output_height, output_width
 
-def non_max_suppression(pred_bboxes, pred_labels, hyper_params):
-    nms_bboxes, nms_scores, nms_labels, valid_detections = tf.image.combined_non_max_suppression(
+def non_max_suppression(pred_bboxes, pred_labels, **kwargs):
+    return tf.image.combined_non_max_suppression(
         pred_bboxes,
         pred_labels,
-        hyper_params["nms_topn"],
-        hyper_params["nms_topn"]
+        **kwargs
     )
-    return nms_bboxes
 
 def get_bboxes_from_deltas(anchors, deltas):
     all_anc_width = anchors[:, :, 3] - anchors[:, :, 1]
@@ -307,7 +305,7 @@ def calculate_max_height_width(imgs):
     return max_height, max_width
 
 def handle_args():
-    parser = argparse.ArgumentParser(description="Region Proposal Network Implementation")
+    parser = argparse.ArgumentParser(description="Faster-RCNN Implementation")
     parser.add_argument("-handle-gpu", action="store_true", help="Tensorflow 2 GPU compatibility flag")
     args = parser.parse_args()
     return args

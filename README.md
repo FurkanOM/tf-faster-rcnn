@@ -17,25 +17,25 @@ To create virtual environment (tensorflow-2 gpu environment):
 conda env create -f environment.yml
 ```
 
-To train Faster-RCNN model:
+To train and test Faster-RCNN model:
 
 ```sh
 python faster_rcnn_trainer.py
+python faster_rcnn_predictor.py
 ```
 
-If you have gpu issues you can use **-handle-gpu** flag:
+You can also train and test RPN alone:
+
+```sh
+python rpn_trainer.py
+python rpn_predictor.py
+```
+
+If you have GPU issues you can use **-handle-gpu** flag with these commands:
 
 ```sh
 python faster_rcnn_trainer.py -handle-gpu
 ```
-
-You can also train RPN alone:
-
-```sh
-python rpn_trainer.py
-```
-
-You can also use **-handle-gpu** flag all of above processes.
 
 ## Todo
 
