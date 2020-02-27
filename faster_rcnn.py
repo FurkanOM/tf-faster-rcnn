@@ -77,14 +77,8 @@ class RoIBBox(Layer):
                                                           max_output_size_per_class=self.hyper_params["nms_topn"],
                                                           max_total_size=self.hyper_params["nms_topn"])
         ################################################################################################################
-        # This method could be updated for batch operations
-        # But not working for now because of different shapes of gt_boxes and gt_labels
-        batch_total_pos_bboxes = tf.tile([total_pos_bboxes], (batch_size,))
-        batch_total_neg_bboxes = tf.tile([total_neg_bboxes], (batch_size,))
-        pos_bbox_indices, neg_bbox_indices, gt_box_indices = tf.map_fn(helpers.get_selected_indices,
-                                                (nms_bboxes, gt_boxes, batch_total_pos_bboxes, batch_total_neg_bboxes),
-                                                dtype=(tf.int32, tf.int32, tf.int32), swap_memory=True)
-        ################################################################################################################
+        pos_bbox_indices, neg_bbox_indices, gt_box_indices = helpers.get_selected_indices(nms_bboxes, gt_boxes, total_pos_bboxes, total_neg_bboxes)
+        #
         pos_roi_bboxes = tf.gather(nms_bboxes, pos_bbox_indices, batch_dims=1)
         neg_roi_bboxes = tf.zeros((batch_size, total_neg_bboxes, 4), tf.float32)
         roi_bboxes = tf.concat([pos_roi_bboxes, neg_roi_bboxes], axis=1)

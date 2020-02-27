@@ -87,14 +87,8 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     if mode != "training":
         return input_img, anchors
     ################################################################################################################
-    # This method could be updated for batch operations
-    # But not working for now because of different shapes of gt_boxes and gt_labels
-    batch_total_pos_bboxes = tf.tile([total_pos_bboxes], (batch_size,))
-    batch_total_neg_bboxes = tf.tile([total_neg_bboxes], (batch_size,))
-    pos_bbox_indices, neg_bbox_indices, gt_box_indices = tf.map_fn(helpers.get_selected_indices,
-                                            (anchors, gt_boxes, batch_total_pos_bboxes, batch_total_neg_bboxes),
-                                            dtype=(tf.int32, tf.int32, tf.int32), swap_memory=True)
-    ################################################################################################################
+    pos_bbox_indices, neg_bbox_indices, gt_box_indices = helpers.get_selected_indices(anchors, gt_boxes, total_pos_bboxes, total_neg_bboxes)
+    #
     gt_boxes_map = helpers.get_gt_boxes_map(gt_boxes, gt_box_indices, batch_size, total_neg_bboxes)
     #
     pos_labels_map = tf.ones((batch_size, total_pos_bboxes), tf.int32)

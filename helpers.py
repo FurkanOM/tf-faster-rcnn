@@ -65,7 +65,7 @@ def get_hyper_params(**kwargs):
 
 def get_padded_batch_params():
     padded_shapes = ([None, None, None], [None, None], [None,])
-    padding_values = (tf.constant(0, tf.uint8), tf.constant(-1, tf.float32), tf.constant(-1, tf.int32))
+    padding_values = (tf.constant(0, tf.uint8), tf.constant(0, tf.float32), tf.constant(-1, tf.int32))
     return padded_shapes, padding_values
 
 def get_VOC_data(split, data_dir="~/tensorflow_datasets"):
@@ -120,20 +120,20 @@ def get_bboxes_from_deltas(anchors, deltas):
     return tf.stack([y1, x1, y2, x2], axis=2)
 
 def generate_iou_map(bboxes, gt_boxes):
-    bbox_y1, bbox_x1, bbox_y2, bbox_x2 = tf.split(bboxes, 4, axis=1)
-    gt_y1, gt_x1, gt_y2, gt_x2 = tf.split(gt_boxes, 4, axis=1)
+    bbox_y1, bbox_x1, bbox_y2, bbox_x2 = tf.split(bboxes, 4, axis=2)
+    gt_y1, gt_x1, gt_y2, gt_x2 = tf.split(gt_boxes, 4, axis=2)
     # Calculate bbox and ground truth boxes areas
-    gt_area = tf.squeeze((gt_y2 - gt_y1) * (gt_x2 - gt_x1), axis=1)
-    bbox_area = tf.squeeze((bbox_y2 - bbox_y1) * (bbox_x2 - bbox_x1), axis=1)
+    gt_area = tf.squeeze((gt_y2 - gt_y1) * (gt_x2 - gt_x1), axis=2)
+    bbox_area = tf.squeeze((bbox_y2 - bbox_y1) * (bbox_x2 - bbox_x1), axis=2)
     #
-    x_top = tf.maximum(bbox_x1, tf.transpose(gt_x1))
-    y_top = tf.maximum(bbox_y1, tf.transpose(gt_y1))
-    x_bottom = tf.minimum(bbox_x2, tf.transpose(gt_x2))
-    y_bottom = tf.minimum(bbox_y2, tf.transpose(gt_y2))
+    x_top = tf.maximum(bbox_x1, tf.transpose(gt_x1, [0, 2, 1]))
+    y_top = tf.maximum(bbox_y1, tf.transpose(gt_y1, [0, 2, 1]))
+    x_bottom = tf.minimum(bbox_x2, tf.transpose(gt_x2, [0, 2, 1]))
+    y_bottom = tf.minimum(bbox_y2, tf.transpose(gt_y2, [0, 2, 1]))
     ### Calculate intersection area
     intersection_area = tf.maximum(x_bottom - x_top, 0) * tf.maximum(y_bottom - y_top, 0)
     ### Calculate union area
-    union_area = (tf.expand_dims(bbox_area, 1) + tf.expand_dims(gt_area, 0) - intersection_area)
+    union_area = (tf.expand_dims(bbox_area, 2) + tf.expand_dims(gt_area, 1) - intersection_area)
     # Intersection over Union
     return intersection_area / union_area
 
@@ -157,26 +157,25 @@ def get_deltas_from_bboxes(bboxes, gt_boxes):
     #
     return tf.stack([delta_y, delta_x, delta_h, delta_w], axis=2)
 
-def get_selected_indices(args):
-    bboxes, gt_boxes, total_pos_bboxes, total_neg_bboxes = args
-    # remove paddings coming from batch operation
-    cond = tf.reduce_any(tf.not_equal(gt_boxes, -1), axis=1)
-    gt_boxes_without_pad = tf.boolean_mask(gt_boxes, cond)
+def get_selected_indices(bboxes, gt_boxes, total_pos_bboxes, total_neg_bboxes):
     # Calculate iou values between each bboxes and ground truth boxes
-    iou_map = generate_iou_map(bboxes, gt_boxes_without_pad)
+    iou_map = generate_iou_map(bboxes, gt_boxes)
     # Get max index value for each row
-    max_indices_each_gt_box = tf.argmax(iou_map, axis=1, output_type=tf.int32)
+    max_indices_each_gt_box = tf.argmax(iou_map, axis=2, output_type=tf.int32)
     # IoU map has iou values for every gt boxes and we merge these values column wise
-    merged_iou_map = tf.reduce_max(iou_map, axis=1)
+    merged_iou_map = tf.reduce_max(iou_map, axis=2)
     # Sorted iou values
     sorted_iou_map = tf.argsort(merged_iou_map, direction="DESCENDING")
     # Get highest and lowest candidate indices
-    pos_candidate_indices = sorted_iou_map[:total_pos_bboxes * 2]
-    neg_candidate_indices = sorted_iou_map[::-1][:total_neg_bboxes * 2]
+    pos_candidate_indices = sorted_iou_map[:, :total_pos_bboxes * 2]
+    neg_candidate_indices = sorted_iou_map[:, ::-1][:, :total_neg_bboxes * 2]
+    # Shuffling
+    pos_candidate_indices_shuffled = tf.transpose(tf.random.shuffle(tf.transpose(pos_candidate_indices)))
+    neg_candidate_indices_shuffled = tf.transpose(tf.random.shuffle(tf.transpose(neg_candidate_indices)))
     # Randomly select pos and neg indices from candidates
-    pos_bbox_indices = tf.random.shuffle(pos_candidate_indices)[:total_pos_bboxes]
-    neg_bbox_indices = tf.random.shuffle(neg_candidate_indices)[:total_neg_bboxes]
-    gt_box_indices = tf.gather(max_indices_each_gt_box, pos_bbox_indices)
+    pos_bbox_indices = pos_candidate_indices_shuffled[:, :total_pos_bboxes]
+    neg_bbox_indices = neg_candidate_indices_shuffled[:, :total_neg_bboxes]
+    gt_box_indices = tf.gather(max_indices_each_gt_box, pos_bbox_indices, batch_dims=1)
     #
     return pos_bbox_indices, neg_bbox_indices, gt_box_indices
 
