@@ -39,6 +39,25 @@ class RoIBBox(Layer):
         return config
 
     def call(self, inputs):
+        """Generating bounding boxes from rpn predictions.
+        First calculating the boxes from predicted deltas and label probs.
+        Then applied non max suppression and selecting "nms_topn" boxes.
+        Finally selecting "total_pos_bboxes" boxes using the IoU values.
+        This process mostly same with the selecting bounding boxes for rpn.
+        inputs:
+            rpn_bbox_deltas = (batch_size, img_output_height, img_output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
+                img_output_height and img_output_width are calculated to the base model output
+                they are (img_height // stride) and (img_width // stride) for VGG16 backbone
+            rpn_labels = (batch_size, img_output_height, img_output_width, anchor_count)
+            anchors = (batch_size, img_output_height * img_output_width * anchor_count, [y1, x1, y2, x2])
+            gt_boxes = (batch_size, padded_gt_boxes_size, [y1, x1, y2, x2])
+                there are could be -1 values because of the padding
+
+        outputs:
+            roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
+            gt_box_indices = (batch_size, total_pos_bboxes)
+                holds the index value of the ground truth bounding box for each selected positive roi box
+        """
         rpn_bbox_deltas = inputs[0]
         rpn_labels = inputs[1]
         anchors = inputs[2]
@@ -82,6 +101,18 @@ class RoIDelta(Layer):
         return config
 
     def call(self, inputs):
+        """Calculating faster rcnn actual bounding box deltas and labels.
+        This layer only running on the training phase.
+        inputs:
+            roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
+            gt_boxes = (batch_size, padded_gt_boxes_size, [y1, x1, y2, x2])
+            gt_labels = (batch_size, padded_gt_boxes_size)
+            gt_box_indices = (batch_size, total_pos_bboxes)
+
+        outputs:
+            roi_bbox_deltas = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels * [delta_y, delta_x, delta_h, delta_w])
+            roi_bbox_labels = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels)
+        """
         roi_bboxes = inputs[0]
         gt_boxes = inputs[1]
         gt_labels = inputs[2]
@@ -121,6 +152,16 @@ class RoIPooling(Layer):
         return config
 
     def call(self, inputs):
+        """Reducing all feature maps to same size.
+        Firstly cropping bounding boxes from the feature maps and then resizing it to the pooling size.
+        inputs:
+            feature_map = (batch_size, img_output_height, img_output_width, channels)
+            roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
+
+        outputs:
+            final_pooling_feature_map = (batch_size, total_pos_bboxes + total_neg_bboxes, pooling_size[0], pooling_size[1], channels)
+                pooling_size usually (7, 7)
+        """
         feature_map = inputs[0]
         roi_bboxes = inputs[1]
         total_pos_bboxes = self.hyper_params["total_pos_bboxes"]

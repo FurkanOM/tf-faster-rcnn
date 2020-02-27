@@ -42,7 +42,7 @@ class CustomCallback(tf.keras.callbacks.Callback):
 
     def on_train_end(self, logs=None):
         if self.last_epoch:
-            print("Training stopped at {0} epoch because loss value did not decrease anymore".format(self.last_epoch))
+            print("Training early stopped at {0} epoch because loss value did not decrease last {1} epochs".format(self.last_epoch+1, self.patience))
 ###############################################################
 
 def get_hyper_params(**kwargs):

@@ -11,7 +11,7 @@ if args.handle_gpu:
     helpers.handle_gpu_compatibility()
 
 batch_size = 1
-# If you have trained faster rcnn model we can load weights from faster rcnn model
+# If you have trained faster rcnn model you can load weights from faster rcnn model
 load_weights_from_frcnn = False
 hyper_params = helpers.get_hyper_params(nms_topn=10)
 
