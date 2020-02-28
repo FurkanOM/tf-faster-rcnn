@@ -37,10 +37,16 @@ If you have GPU issues you can use **-handle-gpu** flag with these commands:
 python faster_rcnn_trainer.py -handle-gpu
 ```
 
+## Faster-RCNN predictions
+
+![Faster-RCNN prediction result](http://furkanomerustaoglu.com/wp-content/uploads/2020/02/frcnn_pred_result.jpg)
+
+Photo by Joséphine Menge on Unsplash
+
 ## Todo
 
 * [x] Batch support
-* [ ] Predictors and test results
+* [x] Predictors and test results
 * [x] Inline documentation
 * [ ] Hyperparam management using command line
 * [ ] Multiple backbone support ([ResNet](https://www.tensorflow.org/api_docs/python/tf/keras/applications/ResNet101), [MobileNet](https://www.tensorflow.org/api_docs/python/tf/keras/applications/MobileNet), etc.)
