@@ -54,4 +54,4 @@ for image_data in VOC_test_data:
                                                 max_output_size_per_class=hyper_params["nms_topn"],
                                                 max_total_size=hyper_params["nms_topn"])
     img_float32 = tf.image.convert_image_dtype(img, tf.float32)
-    helpers.draw_bboxes(img_float32, nms_bboxes[0])
+    helpers.draw_bboxes(img_float32, nms_bboxes)

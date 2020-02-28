@@ -543,8 +543,8 @@ def draw_grid_map(img, grid_map, stride):
 def draw_bboxes(img, bboxes):
     """Drawing bounding boxes on given image.
     inputs:
-        img = (height, width, channels)
-        bboxes = (total_bboxes, [y1, x1, y2, x2])
+        img = (batch_size, height, width, channels)
+        bboxes = (batch_size, total_bboxes, [y1, x1, y2, x2])
             in normalized form [0, 1]
     """
     colors = tf.cast(np.array([[1, 0, 0, 1]] * 10), dtype=tf.float32)
