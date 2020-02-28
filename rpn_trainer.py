@@ -40,10 +40,10 @@ if hyper_params["stride"] == 16:
 
 rpn_model = rpn.get_model(base_model, hyper_params)
 rpn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
-                  loss=[rpn.reg_loss, rpn.cls_loss],
+                  loss=[helpers.reg_loss, helpers.rpn_cls_loss],
                   loss_weights=[10., 1.])
 # Load weights
-rpn_model_path = rpn.get_model_path(hyper_params["stride"])
+rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
 
 if load_weights:
     rpn_model.load_weights(rpn_model_path)

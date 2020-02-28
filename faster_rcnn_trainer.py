@@ -47,10 +47,10 @@ frcnn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
 # You can load rpn weights for faster training
 rpn_load_weights = False
 if rpn_load_weights:
-    rpn_model_path = rpn.get_model_path(hyper_params["stride"])
+    rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
     rpn_model.load_weights(rpn_model_path)
 # Load weights
-frcnn_model_path = faster_rcnn.get_model_path(hyper_params["stride"])
+frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
 
 if load_weights:
     frcnn_model.load_weights(frcnn_model_path)

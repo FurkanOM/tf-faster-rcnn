@@ -32,7 +32,7 @@ if hyper_params["stride"] == 16:
 rpn_model = rpn.get_model(base_model, hyper_params)
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, hyper_params, mode=mode)
 #
-frcnn_model_path = faster_rcnn.get_model_path(hyper_params["stride"])
+frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
 frcnn_model.load_weights(frcnn_model_path)
 
 for image_data in VOC_test_data:

@@ -6,29 +6,27 @@ import numpy as np
 import helpers
 import rpn
 
-def frcnn_cls_loss(args):
-    y_true, y_pred = args
-    lf = tf.losses.CategoricalCrossentropy()
-    return lf(y_true, y_pred)
-
-def rpn_cls_loss(args):
-    y_true, y_pred = args
-    indices = tf.where(tf.not_equal(y_true, -1))
-    target = tf.gather_nd(y_true, indices)
-    output = tf.gather_nd(y_pred, indices)
-    lf = tf.losses.BinaryCrossentropy()
-    return lf(target, output)
-
-def reg_loss(args):
-    y_true, y_pred = args
-    indices = tf.where(tf.not_equal(y_true, 0))
-    target = tf.gather_nd(y_true, indices)
-    output = tf.gather_nd(y_pred, indices)
-    # # Same with the smooth l1 loss
-    lf = tf.losses.Huber()
-    return lf(target, output)
-
 class RoIBBox(Layer):
+    """Generating bounding boxes from rpn predictions.
+    First calculating the boxes from predicted deltas and label probs.
+    Then applied non max suppression and selecting "nms_topn" boxes.
+    Finally selecting "total_pos_bboxes" boxes using the IoU values.
+    This process mostly same with the selecting bounding boxes for rpn.
+    inputs:
+        rpn_bbox_deltas = (batch_size, img_output_height, img_output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
+            img_output_height and img_output_width are calculated to the base model output
+            they are (img_height // stride) and (img_width // stride) for VGG16 backbone
+        rpn_labels = (batch_size, img_output_height, img_output_width, anchor_count)
+        anchors = (batch_size, img_output_height * img_output_width * anchor_count, [y1, x1, y2, x2])
+        gt_boxes = (batch_size, padded_gt_boxes_size, [y1, x1, y2, x2])
+            there are could be -1 values because of the padding
+
+    outputs:
+        roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
+        gt_box_indices = (batch_size, total_pos_bboxes)
+            holds the index value of the ground truth bounding box for each selected positive roi box
+    """
+
     def __init__(self, hyper_params, **kwargs):
         super(RoIBBox, self).__init__(**kwargs)
         self.hyper_params = hyper_params
@@ -39,25 +37,6 @@ class RoIBBox(Layer):
         return config
 
     def call(self, inputs):
-        """Generating bounding boxes from rpn predictions.
-        First calculating the boxes from predicted deltas and label probs.
-        Then applied non max suppression and selecting "nms_topn" boxes.
-        Finally selecting "total_pos_bboxes" boxes using the IoU values.
-        This process mostly same with the selecting bounding boxes for rpn.
-        inputs:
-            rpn_bbox_deltas = (batch_size, img_output_height, img_output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
-                img_output_height and img_output_width are calculated to the base model output
-                they are (img_height // stride) and (img_width // stride) for VGG16 backbone
-            rpn_labels = (batch_size, img_output_height, img_output_width, anchor_count)
-            anchors = (batch_size, img_output_height * img_output_width * anchor_count, [y1, x1, y2, x2])
-            gt_boxes = (batch_size, padded_gt_boxes_size, [y1, x1, y2, x2])
-                there are could be -1 values because of the padding
-
-        outputs:
-            roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
-            gt_box_indices = (batch_size, total_pos_bboxes)
-                holds the index value of the ground truth bounding box for each selected positive roi box
-        """
         rpn_bbox_deltas = inputs[0]
         rpn_labels = inputs[1]
         anchors = inputs[2]
@@ -85,6 +64,19 @@ class RoIBBox(Layer):
         return tf.stop_gradient(roi_bboxes), tf.stop_gradient(gt_box_indices)
 
 class RoIDelta(Layer):
+    """Calculating faster rcnn actual bounding box deltas and labels.
+    This layer only running on the training phase.
+    inputs:
+        roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
+        gt_boxes = (batch_size, padded_gt_boxes_size, [y1, x1, y2, x2])
+        gt_labels = (batch_size, padded_gt_boxes_size)
+        gt_box_indices = (batch_size, total_pos_bboxes)
+
+    outputs:
+        roi_bbox_deltas = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels * [delta_y, delta_x, delta_h, delta_w])
+        roi_bbox_labels = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels)
+    """
+
     def __init__(self, hyper_params, **kwargs):
         super(RoIDelta, self).__init__(**kwargs)
         self.hyper_params = hyper_params
@@ -95,18 +87,6 @@ class RoIDelta(Layer):
         return config
 
     def call(self, inputs):
-        """Calculating faster rcnn actual bounding box deltas and labels.
-        This layer only running on the training phase.
-        inputs:
-            roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
-            gt_boxes = (batch_size, padded_gt_boxes_size, [y1, x1, y2, x2])
-            gt_labels = (batch_size, padded_gt_boxes_size)
-            gt_box_indices = (batch_size, total_pos_bboxes)
-
-        outputs:
-            roi_bbox_deltas = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels * [delta_y, delta_x, delta_h, delta_w])
-            roi_bbox_labels = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels)
-        """
         roi_bboxes = inputs[0]
         gt_boxes = inputs[1]
         gt_labels = inputs[2]
@@ -136,6 +116,17 @@ class RoIDelta(Layer):
         return tf.stop_gradient(roi_bbox_deltas), tf.stop_gradient(roi_bbox_labels)
 
 class RoIPooling(Layer):
+    """Reducing all feature maps to same size.
+    Firstly cropping bounding boxes from the feature maps and then resizing it to the pooling size.
+    inputs:
+        feature_map = (batch_size, img_output_height, img_output_width, channels)
+        roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
+
+    outputs:
+        final_pooling_feature_map = (batch_size, total_pos_bboxes + total_neg_bboxes, pooling_size[0], pooling_size[1], channels)
+            pooling_size usually (7, 7)
+    """
+
     def __init__(self, hyper_params, **kwargs):
         super(RoIPooling, self).__init__(**kwargs)
         self.hyper_params = hyper_params
@@ -146,16 +137,6 @@ class RoIPooling(Layer):
         return config
 
     def call(self, inputs):
-        """Reducing all feature maps to same size.
-        Firstly cropping bounding boxes from the feature maps and then resizing it to the pooling size.
-        inputs:
-            feature_map = (batch_size, img_output_height, img_output_width, channels)
-            roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
-
-        outputs:
-            final_pooling_feature_map = (batch_size, total_pos_bboxes + total_neg_bboxes, pooling_size[0], pooling_size[1], channels)
-                pooling_size usually (7, 7)
-        """
         feature_map = inputs[0]
         roi_bboxes = inputs[1]
         total_pos_bboxes = self.hyper_params["total_pos_bboxes"]
@@ -180,27 +161,48 @@ class RoIPooling(Layer):
         return final_pooling_feature_map
 
 def get_valid_predictions(roi_bboxes, frcnn_delta_pred, frcnn_label_pred, total_labels):
+    """Generating valid detections from faster rcnn predictions removing backgroud predictions.
+    Batch size should be 1 for this method.
+    inputs:
+        roi_bboxes = (batch_size, total_pos_bboxes + total_neg_bboxes, [y1, x1, y2, x2])
+        frcnn_delta_pred = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels * [delta_y, delta_x, delta_h, delta_w])
+        frcnn_label_pred = (batch_size, total_pos_bboxes + total_neg_bboxes, total_labels)
+        total_labels = number, 20 + 1 for VOC dataset +1 for background label
+
+    outputs:
+        valid_pred_bboxes = (batch_size, total_valid_bboxes, total_labels, [y1, x1, y2, x2])
+        valid_labels = (batch_size, total_valid_bboxes, total_labels)
+    """
     pred_labels_map = tf.argmax(frcnn_label_pred, 2, output_type=tf.int32)
     #
     valid_label_indices = tf.where(tf.not_equal(pred_labels_map, total_labels-1))
-    total_bboxes = tf.shape(valid_label_indices)[0]
+    total_valid_bboxes = tf.shape(valid_label_indices)[0]
     #
     valid_roi_bboxes = tf.gather_nd(roi_bboxes, valid_label_indices)
     valid_deltas = tf.gather_nd(frcnn_delta_pred, valid_label_indices)
-    valid_deltas = tf.reshape(valid_deltas, (total_bboxes, total_labels, 4))
+    valid_deltas = tf.reshape(valid_deltas, (total_valid_bboxes, total_labels, 4))
     valid_labels = tf.gather_nd(frcnn_label_pred, valid_label_indices)
     #
     valid_labels_map = tf.gather_nd(pred_labels_map, valid_label_indices)
     #
-    flatted_bbox_indices = tf.reshape(tf.range(total_bboxes), (-1, 1))
+    flatted_bbox_indices = tf.reshape(tf.range(total_valid_bboxes), (-1, 1))
     flatted_labels_indices = tf.reshape(valid_labels_map, (-1, 1))
     scatter_indices = tf.concat([flatted_bbox_indices, flatted_labels_indices], 1)
-    scatter_indices = tf.reshape(scatter_indices, (total_bboxes, 2))
-    valid_roi_bboxes = tf.scatter_nd(scatter_indices, valid_roi_bboxes, (total_bboxes, total_labels, 4))
-    pred_bboxes = helpers.get_bboxes_from_deltas(valid_roi_bboxes, valid_deltas)
-    return tf.expand_dims(pred_bboxes, 0), tf.expand_dims(valid_labels, 0)
+    scatter_indices = tf.reshape(scatter_indices, (total_valid_bboxes, 2))
+    valid_roi_bboxes = tf.scatter_nd(scatter_indices, valid_roi_bboxes, (total_valid_bboxes, total_labels, 4))
+    valid_pred_bboxes = helpers.get_bboxes_from_deltas(valid_roi_bboxes, valid_deltas)
+    return tf.expand_dims(valid_pred_bboxes, 0), tf.expand_dims(valid_labels, 0)
 
 def generator(dataset, hyper_params, input_processor):
+    """Tensorflow data generator for fit method, yielding inputs and outputs.
+    inputs:
+        dataset = tf.data.Dataset, PaddedBatchDataset
+        hyper_params = dictionary
+        input_processor = function for preparing image for input. It's getting from backbone.
+
+    outputs:
+        yield inputs, outputs
+    """
     while True:
         for image_data in dataset:
             _, gt_boxes, gt_labels = image_data
@@ -208,6 +210,16 @@ def generator(dataset, hyper_params, input_processor):
             yield (input_img, anchors, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
 
 def get_model(base_model, rpn_model, hyper_params, mode="training"):
+    """Generating rpn model for given backbone base model and hyper params.
+    inputs:
+        base_model = tf.keras.model pretrained backbone, only VGG16 available for now
+        rpn_model = tf.keras.model generated rpn model
+        hyper_params = dictionary
+        mode = "training" or "inference"
+
+    outputs:
+        frcnn_model = tf.keras.model
+    """
     input_img = base_model.input
     rpn_reg_predictions, rpn_cls_predictions = rpn_model.output
     #
@@ -237,12 +249,12 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
                                                         [roi_bboxes, input_gt_boxes, input_gt_labels, gt_box_indices])
         #
         loss_names = ["rpn_reg_loss", "rpn_cls_loss", "frcnn_reg_loss", "frcnn_cls_loss"]
-        rpn_reg_loss_layer = Lambda(reg_loss, name=loss_names[0])([rpn_reg_actuals, rpn_reg_predictions])
-        rpn_cls_loss_layer = Lambda(rpn_cls_loss, name=loss_names[1])([rpn_cls_actuals, rpn_cls_predictions])
-        frcnn_reg_loss_layer = Lambda(reg_loss, name=loss_names[2])([frcnn_reg_actuals, frcnn_reg_predictions])
-        frcnn_cls_loss_layer = Lambda(frcnn_cls_loss, name=loss_names[3])([frcnn_cls_actuals, frcnn_cls_predictions])
+        rpn_reg_loss_layer = Lambda(helpers.reg_loss, name=loss_names[0])([rpn_reg_actuals, rpn_reg_predictions])
+        rpn_cls_loss_layer = Lambda(helpers.rpn_cls_loss, name=loss_names[1])([rpn_cls_actuals, rpn_cls_predictions])
+        frcnn_reg_loss_layer = Lambda(helpers.reg_loss, name=loss_names[2])([frcnn_reg_actuals, frcnn_reg_predictions])
+        frcnn_cls_loss_layer = Lambda(helpers.frcnn_cls_loss, name=loss_names[3])([frcnn_cls_actuals, frcnn_cls_predictions])
         #
-        model = Model(inputs=[input_img, input_anchors, input_gt_boxes, input_gt_labels,
+        frcnn_model = Model(inputs=[input_img, input_anchors, input_gt_boxes, input_gt_labels,
                               rpn_reg_actuals, rpn_cls_actuals],
                       outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
                                frcnn_reg_predictions, frcnn_cls_predictions,
@@ -250,20 +262,13 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
                                frcnn_reg_loss_layer, frcnn_cls_loss_layer])
         #
         for layer_name in loss_names:
-            layer = model.get_layer(layer_name)
-            model.add_loss(layer.output)
-            model.add_metric(layer.output, name=layer_name, aggregation="mean")
+            layer = frcnn_model.get_layer(layer_name)
+            frcnn_model.add_loss(layer.output)
+            frcnn_model.add_metric(layer.output, name=layer_name, aggregation="mean")
         #
     else:
-        model = Model(inputs=[input_img, input_anchors, input_gt_boxes],
+        frcnn_model = Model(inputs=[input_img, input_anchors, input_gt_boxes],
                       outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
                                frcnn_reg_predictions, frcnn_cls_predictions])
         #
-    return model
-
-def get_model_path(stride):
-    main_path = "models"
-    if not os.path.exists(main_path):
-        os.makedirs(main_path)
-    model_path = os.path.join(main_path, "stride_{0}_frcnn_model_weights.h5".format(stride))
-    return model_path
+    return frcnn_model

@@ -32,8 +32,8 @@ if hyper_params["stride"] == 16:
     base_model = Sequential(base_model.layers[:-1])
 rpn_model = rpn.get_model(base_model, hyper_params)
 
-frcnn_model_path = faster_rcnn.get_model_path(hyper_params["stride"])
-rpn_model_path = rpn.get_model_path(hyper_params["stride"])
+frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
+rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
 model_path = frcnn_model_path if load_weights_from_frcnn else rpn_model_path
 rpn_model.load_weights(model_path, by_name=True)
 
@@ -50,6 +50,8 @@ for image_data in VOC_test_data:
     rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
     rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, anchor_row_size, 1, 4))
     #
-    nms_bboxes = helpers.non_max_suppression(rpn_bboxes, rpn_labels, hyper_params)
+    nms_bboxes, _, _, _ = helpers.non_max_suppression(rpn_bboxes, rpn_labels,
+                                                max_output_size_per_class=hyper_params["nms_topn"],
+                                                max_total_size=hyper_params["nms_topn"])
     img_float32 = tf.image.convert_image_dtype(img, tf.float32)
-    helpers.draw_bboxes(img_float32, nms_bboxes)
+    helpers.draw_bboxes(img_float32, nms_bboxes[0])

@@ -5,22 +5,15 @@ from tensorflow.keras.models import Model
 import numpy as np
 import helpers
 
-def cls_loss(y_true, y_pred):
-    indices = tf.where(tf.not_equal(y_true, -1))
-    target = tf.gather_nd(y_true, indices)
-    output = tf.gather_nd(y_pred, indices)
-    lf = tf.losses.BinaryCrossentropy()
-    return lf(target, output)
-
-def reg_loss(y_true, y_pred):
-    indices = tf.where(tf.not_equal(y_true, 0))
-    target = tf.gather_nd(y_true, indices)
-    output = tf.gather_nd(y_pred, indices)
-    # # Same with the smooth l1 loss
-    lf = tf.losses.Huber()
-    return lf(target, output)
-
 def generate_base_anchors(hyper_params):
+    """Generating top left anchors for given anchor_ratios, anchor_scales and stride values.
+    inputs:
+        hyper_params = dictionary
+
+    outputs:
+        base_anchors = (anchor_count, [y1, x1, y2, x2])
+            these values not normalized yet
+    """
     stride = hyper_params["stride"]
     anchor_ratios = hyper_params["anchor_ratios"]
     anchor_scales = hyper_params["anchor_scales"]
@@ -39,6 +32,17 @@ def generate_base_anchors(hyper_params):
     return np.array(base_anchors, dtype=np.float32)
 
 def generate_anchors(img_params, hyper_params):
+    """Broadcasting base_anchors and generating all anchors for given image parameters.
+    inputs:
+        img_params = (image height, image width, image output height, image output width)
+            these output values need to be calculated for used backbone,
+            for VGG16 output dimensions = dimension (height or width) // stride
+        hyper_params = dictionary
+
+    outputs:
+        anchors = (output_width * output_height * anchor_count, [y1, x1, y2, x2])
+            these values in normalized format between [0, 1]
+    """
     anchor_count = hyper_params["anchor_count"]
     stride = hyper_params["stride"]
     height, width, output_height, output_width = img_params
@@ -64,12 +68,42 @@ def generate_anchors(img_params, hyper_params):
     return anchors
 
 def generator(dataset, hyper_params, input_processor):
+    """Tensorflow data generator for fit method, yielding inputs and outputs.
+    inputs:
+        dataset = tf.data.Dataset, PaddedBatchDataset
+        hyper_params = dictionary
+        input_processor = function for preparing image for input. It's getting from backbone.
+
+    outputs:
+        yield inputs, outputs
+    """
     while True:
         for image_data in dataset:
             input_img, bbox_deltas, bbox_labels, _ = get_step_data(image_data, hyper_params, input_processor)
             yield input_img, (bbox_deltas, bbox_labels)
 
 def get_step_data(image_data, hyper_params, input_processor, mode="training"):
+    """Generating one step data for training or inference.
+    Batch operations supported.
+    inputs:
+        image_data =
+            img (batch_size, height, width, channels)
+            gt_boxes (batch_size, gt_box_size, [y1, x1, y2, x2])
+                these values in normalized format between [0, 1]
+            gt_labels (batch_size, gt_box_size)
+        hyper_params = dictionary
+        input_processor = function for preparing image for input. It's getting from backbone.
+        mode = "training" or "inference"
+
+    outputs:
+        input_img = (batch_size, height, width, channels)
+            preprocessed image using input_processor
+        bbox_deltas = (batch_size, output_height, output_width, anchor_count * [y1, x1, y2, x2])
+            actual outputs for rpn, generating only training mode
+        bbox_labels = (batch_size, output_height, output_width, anchor_count)
+            actual outputs for rpn, generating only training mode
+        anchors = (batch_size, output_height * output_width * anchor_count, [y1, x1, y2, x2])
+    """
     img, gt_boxes, gt_labels = image_data
     batch_size = tf.shape(img)[0]
     input_img = input_processor(img)
@@ -113,15 +147,16 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     return input_img, bbox_deltas, bbox_labels, anchors
 
 def get_model(base_model, hyper_params):
+    """Generating rpn model for given backbone base model and hyper params.
+    inputs:
+        base_model = tf.keras.model pretrained backbone, only VGG16 available for now
+        hyper_params = dictionary
+
+    outputs:
+        rpn_model = tf.keras.model
+    """
     output = Conv2D(512, (3, 3), activation="relu", padding="same", name="rpn_conv")(base_model.output)
     rpn_cls_output = Conv2D(hyper_params["anchor_count"], (1, 1), activation="sigmoid", name="rpn_cls")(output)
     rpn_reg_output = Conv2D(hyper_params["anchor_count"] * 4, (1, 1), activation="linear", name="rpn_reg")(output)
     rpn_model = Model(inputs=base_model.input, outputs=[rpn_reg_output, rpn_cls_output])
     return rpn_model
-
-def get_model_path(stride):
-    main_path = "models"
-    if not os.path.exists(main_path):
-        os.makedirs(main_path)
-    model_path = os.path.join(main_path, "stride_{0}_rpn_model_weights.h5".format(stride))
-    return model_path
