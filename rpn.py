@@ -65,6 +65,7 @@ def generate_anchors(img_params, hyper_params):
               grid_map.reshape((1, output_area, 4)).transpose((1, 0, 2))
     anchors = anchors.reshape((output_area * anchor_count, 4)).astype(np.float32)
     anchors = helpers.normalize_bboxes(anchors, height, width)
+    anchors = np.clip(anchors, 0, 1)
     return anchors
 
 def generator(dataset, hyper_params, input_processor):
