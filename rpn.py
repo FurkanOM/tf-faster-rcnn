@@ -99,7 +99,7 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     outputs:
         input_img = (batch_size, height, width, channels)
             preprocessed image using input_processor
-        bbox_deltas = (batch_size, output_height, output_width, anchor_count * [y1, x1, y2, x2])
+        bbox_deltas = (batch_size, output_height, output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
             actual outputs for rpn, generating only training mode
         bbox_labels = (batch_size, output_height, output_width, anchor_count)
             actual outputs for rpn, generating only training mode
