@@ -140,7 +140,7 @@ def get_padded_batch_params():
         padding_values = padding values with dtypes for (images, ground truth boxes, labels)
     """
     padded_shapes = ([None, None, None], [None, None], [None,])
-    padding_values = (tf.constant(0, tf.uint8), tf.constant(0, tf.float32), tf.constant(-1, tf.int32))
+    padding_values = (tf.constant(0, tf.uint8), tf.constant(0, tf.float32), tf.constant(-1, tf.int64))
     return padded_shapes, padding_values
 
 def get_VOC_data(split, data_dir="~/tensorflow_datasets"):
@@ -180,11 +180,11 @@ def get_labels(info):
     return info.features["labels"].names
 
 def preprocessing(image_data, max_height, max_width):
-    """Image centric padding with zeros and updating gt_boxes, taking into account paddings.
+    """Image resizing operation handled before batch operations.
     inputs:
         image_data = tensorflow dataset image_data
-        max_height = final image height after padding
-        max_width = final image width after padding
+        max_height = final image height after resizing
+        max_width = final image width after resizing
 
     outputs:
         img = (max_height, max_width, channels)
@@ -192,11 +192,9 @@ def preprocessing(image_data, max_height, max_width):
         gt_labels = (gt_box_size)
     """
     img = image_data["image"]
-    img_shape = tf.shape(img)
-    padding = get_padding(img_shape[0], img_shape[1], max_height, max_width)
-    gt_boxes = update_gt_boxes(image_data["objects"]["bbox"], img_shape[0], img_shape[1], padding)
-    img = get_padded_img(img, max_height, max_width)
-    gt_labels = tf.cast(image_data["objects"]["label"], tf.int32)
+    img = resize_image(img, max_height, max_width)
+    gt_boxes = image_data["objects"]["bbox"]
+    gt_labels = image_data["objects"]["label"]
     return img, gt_boxes, gt_labels
 
 def get_image_params(batch_img, stride):
@@ -436,64 +434,18 @@ def denormalize_bboxes(bboxes, height, width):
     new_bboxes[:, 3] = np.round(bboxes[:, 3] * width)
     return new_bboxes
 
-def update_gt_boxes(gt_boxes, height, width, padding):
-    """Updating ground truth boxes taking into account paddings.
-    inputs:
-        gt_boxes = (batch_size, total_gt_boxes, [y1, x1, y2, x2])
-            in normalized form [0, 1]
-        height = original image height before padding
-        width = original image width before padding
-        padding = calculated padding values for image
-
-    outputs:
-        updated_gt_boxes = (batch_size, total_gt_boxes, [y1, x1, y2, x2])
-            in normalized form [0, 1]
-    """
-    height = tf.cast(height, tf.float32)
-    width = tf.cast(width, tf.float32)
-    padded_height = height + padding[0] + padding[2]
-    padded_width = width + padding[1] + padding[3]
-    y1 = (tf.round(gt_boxes[:, 0] * height) + padding[0]) / padded_height
-    x1 = (tf.round(gt_boxes[:, 1] * width) + padding[1]) / padded_width
-    y2 = (tf.round(gt_boxes[:, 2] * height) + padding[0]) / padded_height
-    x2 = (tf.round(gt_boxes[:, 3] * width) + padding[1]) / padded_width
-    return tf.stack([y1, x1, y2, x2], axis=1)
-
-def get_padded_img(img, max_height, max_width):
-    """Generating image centric padded image with zeros.
+def resize_image(img, final_height, final_width):
+    """Resize image to given height and width values.
     inputs:
         img = (height, width, channels)
-        max_height = final image height after padding
-        max_width = final image width after padding
+        final_height = final image height after resizing
+        final_width = final image width after resizing
 
     outputs:
-        padded_img = (max_height, max_width, channels)
+        resized_img = (final_height, final_width, channels)
     """
-    return tf.image.resize_with_crop_or_pad(
-        img,
-        max_height,
-        max_width
-    )
-
-def get_padding(height, width, max_height, max_width):
-    """Calculating padding values for image centric operations.
-    Calculations are carried out so that paddings are added to the top and bottom, left and right sides of the picture equally.
-    inputs:
-        height = original image height before padding
-        width = original image width before padding
-        max_height = final image height after padding
-        max_width = final image width after padding
-
-    outputs:
-        paddings = (top, left, bottom, right)
-    """
-    padding_height = max_height - height
-    padding_width = max_width - width
-    top = padding_height // 2
-    bottom = padding_height - top
-    left = padding_width // 2
-    right = padding_width - left
-    return tf.cast(tf.stack([top, left, bottom, right]), tf.float32)
+    resized_img = tf.image.resize(tf.image.convert_image_dtype(img, tf.float32), (final_height, final_width))
+    return tf.image.convert_image_dtype(resized_img, tf.uint8)
 
 def img_from_array(array):
     """Getting pillow image object from numpy array.
