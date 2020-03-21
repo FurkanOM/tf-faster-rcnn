@@ -271,4 +271,29 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
                       outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
                                frcnn_reg_predictions, frcnn_cls_predictions])
         #
+    dummy_initializer = get_dummy_initializer(hyper_params, mode)
+    frcnn_model(dummy_initializer)
     return frcnn_model
+
+def get_dummy_initializer(hyper_params, mode="training"):
+    """Generating dummy data for initialize model.
+    In this way, the training process can continue from where it left off.
+    inputs:
+        hyper_params = dictionary
+        mode = "training" or "inference"
+
+    outputs:
+        dummy data for model initialization
+    """
+    final_height, final_width = helpers.VOC["max_height"], helpers.VOC["max_width"]
+    img = tf.random.uniform((1, final_height, final_width, 3))
+    output_height, output_width = final_height // hyper_params["stride"], final_width // hyper_params["stride"]
+    total_anchors = output_height * output_width * hyper_params["anchor_count"]
+    anchors = tf.random.uniform((1, total_anchors, 4))
+    gt_boxes = tf.random.uniform((1, 1, 4))
+    if mode != "training":
+        return img, anchors, gt_boxes
+    gt_labels = tf.random.uniform((1, 1), maxval=hyper_params["total_labels"], dtype=tf.int32)
+    bbox_deltas = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"] * 4))
+    bbox_labels = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"]), maxval=hyper_params["total_labels"], dtype=tf.int32)
+    return img, anchors, gt_boxes, gt_labels, bbox_deltas, bbox_labels
