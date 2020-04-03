@@ -15,7 +15,7 @@ batch_size = 1
 load_weights_from_frcnn = False
 hyper_params = helpers.get_hyper_params(nms_topn=10)
 
-VOC_test_data, VOC_info = helpers.get_VOC_data("test")
+VOC_test_data, VOC_info = helpers.get_dataset("voc/2007", "test")
 labels = helpers.get_labels(VOC_info)
 # We add 1 class for background
 hyper_params["total_labels"] = len(labels) + 1

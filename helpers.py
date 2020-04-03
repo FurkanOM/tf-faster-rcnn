@@ -143,9 +143,10 @@ def get_padded_batch_params():
     padding_values = (tf.constant(0, tf.uint8), tf.constant(0, tf.float32), tf.constant(-1, tf.int64))
     return padded_shapes, padding_values
 
-def get_VOC_data(split, data_dir="~/tensorflow_datasets"):
+def get_dataset(name, split, data_dir="~/tensorflow_datasets"):
     """Get tensorflow dataset split and info.
     inputs:
+        name = name of the dataset, voc/2007, voc/2012, etc.
         split = data split string, should be one of ["train", "validation", "test"]
         data_dir = read/write path for tensorflow datasets
 
@@ -153,9 +154,20 @@ def get_VOC_data(split, data_dir="~/tensorflow_datasets"):
         dataset = tensorflow dataset split
         info = tensorflow dataset info
     """
-    assert split in ["train", "validation", "test"]
-    dataset, info = tfds.load("voc", split=split, data_dir=data_dir, with_info=True)
+    assert split in ["train", "train+validation", "validation", "test"]
+    dataset, info = tfds.load(name, split=split, data_dir=data_dir, with_info=True)
     return dataset, info
+
+def get_step_size(total_items, batch_size):
+    """Get step size for given total item size and batch size.
+    inputs:
+        total_items = number of total items
+        batch_size = number of batch size during training or validation
+
+    outputs:
+        step_size = number of step size for model training
+    """
+    return np.ceil(total_items / batch_size)
 
 def get_total_item_size(info, split):
     """Get total item size for given split.
@@ -166,7 +178,9 @@ def get_total_item_size(info, split):
     outputs:
         total_item_size = number of total items
     """
-    assert split in ["train", "validation", "test"]
+    assert split in ["train", "train+validation", "validation", "test"]
+    if split == "train+validation":
+        return info.splits["train"].num_examples + info.splits["validation"].num_examples
     return info.splits[split].num_examples
 
 def get_labels(info):

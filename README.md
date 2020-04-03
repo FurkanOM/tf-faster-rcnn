@@ -2,7 +2,7 @@
 
 This is tensorflow Faster-RCNN implementation from scratch supporting to the batch processing.
 All methods are tried to be created in the simplest way for easy understanding.
-Most of the operations performed during the implementation were carried out as described in the [paper](https://arxiv.org/pdf/1506.01497.pdf) and [tf-rpn](https://github.com/FurkanOM/tf-rpn) repository.
+Most of the operations performed during the implementation were carried out as described in the [paper](https://arxiv.org/abs/1506.01497) and [tf-rpn](https://github.com/FurkanOM/tf-rpn) repository.
 
 It's implemented and tested with **tensorflow 2.0**
 
