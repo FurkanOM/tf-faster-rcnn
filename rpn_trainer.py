@@ -50,7 +50,7 @@ rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
 if load_weights:
     rpn_model.load_weights(rpn_model_path)
 
-checkpoint_callback = ModelCheckpoint(ssd_model_path, monitor="val_loss", save_best_only=True, save_weights_only=True)
+checkpoint_callback = ModelCheckpoint(rpn_model_path, monitor="val_loss", save_best_only=True, save_weights_only=True)
 
 rpn_model.fit(rpn_train_feed,
               steps_per_epoch=step_size_train,
