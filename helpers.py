@@ -13,37 +13,6 @@ VOC = {
     "max_height": 500,
     "max_width": 500,
 }
-###############################################################
-## Custom callback for model saving and early stopping
-###############################################################
-class CustomCallback(tf.keras.callbacks.Callback):
-    def __init__(self, model_path, monitor, patience=0):
-        super(CustomCallback, self).__init__()
-        self.model_path = model_path
-        self.monitor = monitor
-        self.patience = patience
-
-    def on_train_begin(self, logs=None):
-        self.patience_counter = 0
-        self.best_loss = float("inf")
-        self.last_epoch = 0
-
-    def on_epoch_end(self, epoch, logs=None):
-        self.last_epoch = epoch
-        current = logs.get(self.monitor)
-        if np.less(current, self.best_loss):
-            self.best_loss = current
-            self.patience_counter = 0
-            self.model.save_weights(self.model_path)
-        else:
-            self.patience_counter += 1
-            if self.patience_counter >= self.patience:
-                self.model.stop_training = True
-
-    def on_train_end(self, logs=None):
-        if self.last_epoch:
-            print("Training early stopped at {0} epoch because loss value did not decrease last {1} epochs".format(self.last_epoch+1, self.patience))
-###############################################################
 
 def frcnn_cls_loss(*args):
     """Calculating faster rcnn class loss value.

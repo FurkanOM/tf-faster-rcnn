@@ -33,7 +33,7 @@ rpn_model = rpn.get_model(base_model, hyper_params)
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, hyper_params, mode=mode)
 #
 frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
-#frcnn_model.load_weights(frcnn_model_path)
+frcnn_model.load_weights(frcnn_model_path)
 
 background_label = "bg"
 labels = [background_label] + labels

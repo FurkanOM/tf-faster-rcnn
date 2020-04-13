@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
 import helpers
@@ -57,11 +58,11 @@ frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
 if load_weights:
     frcnn_model.load_weights(frcnn_model_path)
 
-custom_callback = helpers.CustomCallback(frcnn_model_path, monitor="val_loss", patience=5)
+checkpoint_callback = ModelCheckpoint(ssd_model_path, monitor="val_loss", save_best_only=True, save_weights_only=True)
 
 frcnn_model.fit(frcnn_train_feed,
                 steps_per_epoch=step_size_train,
                 validation_data=frcnn_val_feed,
                 validation_steps=step_size_val,
                 epochs=epochs,
-                callbacks=[custom_callback])
+                callbacks=[checkpoint_callback])
