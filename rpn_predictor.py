@@ -37,9 +37,12 @@ rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
 model_path = frcnn_model_path if load_weights_from_frcnn else rpn_model_path
 rpn_model.load_weights(model_path, by_name=True)
 
+anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
+
 for image_data in VOC_test_data:
     img, _, _ = image_data
-    input_img, anchors = rpn.get_step_data(image_data, hyper_params, preprocess_input, mode="inference")
+    input_img = preprocess_input(img)
+    input_img = tf.image.convert_image_dtype(input_img, tf.float32)
     rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(input_img)
     #
     anchors_shape = tf.shape(anchors)

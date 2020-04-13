@@ -15,29 +15,29 @@ class RoIBBox(Layer):
             img_output_height and img_output_width are calculated to the base model output
             they are (img_height // stride) and (img_width // stride) for VGG16 backbone
         rpn_labels = (batch_size, img_output_height, img_output_width, anchor_count)
-        anchors = (batch_size, img_output_height * img_output_width * anchor_count, [y1, x1, y2, x2])
 
     outputs:
         roi_bboxes = (batch_size, nms_topn, [y1, x1, y2, x2])
     """
 
-    def __init__(self, hyper_params, **kwargs):
+    def __init__(self, anchors, hyper_params, **kwargs):
         super(RoIBBox, self).__init__(**kwargs)
         self.hyper_params = hyper_params
+        self.anchors = tf.constant(anchors, dtype=tf.float32)
 
     def get_config(self):
         config = super(RoIBBox, self).get_config()
-        config.update({"hyper_params": self.hyper_params})
+        config.update({"hyper_params": self.hyper_params, "anchors": self.anchors})
         return config
 
     def call(self, inputs):
         rpn_bbox_deltas = inputs[0]
         rpn_labels = inputs[1]
-        anchors = inputs[2]
+        anchors = self.anchors
         #
         total_pos_bboxes = self.hyper_params["total_pos_bboxes"]
-        anchors_shape = tf.shape(anchors)
-        batch_size, total_anchors = anchors_shape[0], anchors_shape[1]
+        total_anchors = anchors.shape[0]
+        batch_size = tf.shape(rpn_bbox_deltas)[0]
         rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
         rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors, 1))
         #
@@ -148,10 +148,12 @@ class RoIPooling(Layer):
         final_pooling_feature_map = tf.reshape(pooling_feature_map, (batch_size, total_bboxes, pooling_feature_map.shape[1], pooling_feature_map.shape[2], pooling_feature_map.shape[3]))
         return final_pooling_feature_map
 
-def generator(dataset, hyper_params, input_processor):
+def generator(dataset, anchors, hyper_params, input_processor):
     """Tensorflow data generator for fit method, yielding inputs and outputs.
     inputs:
         dataset = tf.data.Dataset, PaddedBatchDataset
+        anchors = (total_anchors, [y1, x1, y2, x2])
+            these values in normalized format between [0, 1]
         hyper_params = dictionary
         input_processor = function for preparing image for input. It's getting from backbone.
 
@@ -161,10 +163,10 @@ def generator(dataset, hyper_params, input_processor):
     while True:
         for image_data in dataset:
             _, gt_boxes, gt_labels = image_data
-            input_img, bbox_deltas, bbox_labels, anchors = rpn.get_step_data(image_data, hyper_params, input_processor)
-            yield (input_img, anchors, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
+            input_img, bbox_deltas, bbox_labels = rpn.get_step_data(image_data, anchors, hyper_params, input_processor)
+            yield (input_img, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
 
-def get_model(base_model, rpn_model, hyper_params, mode="training"):
+def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
     """Generating rpn model for given backbone base model and hyper params.
     inputs:
         base_model = tf.keras.model pretrained backbone, only VGG16 available for now
@@ -178,9 +180,7 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
     input_img = base_model.input
     rpn_reg_predictions, rpn_cls_predictions = rpn_model.output
     #
-    input_anchors = Input(shape=(None, 4), name="input_anchors", dtype=tf.float32)
-    #
-    roi_bboxes = RoIBBox(hyper_params, name="roi_bboxes")([rpn_reg_predictions, rpn_cls_predictions, input_anchors])
+    roi_bboxes = RoIBBox(anchors, hyper_params, name="roi_bboxes")([rpn_reg_predictions, rpn_cls_predictions])
     #
     roi_pooled = RoIPooling(hyper_params, name="roi_pooling")([base_model.output, roi_bboxes])
     #
@@ -208,7 +208,7 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
         frcnn_reg_loss_layer = Lambda(helpers.reg_loss, name=loss_names[2])([frcnn_reg_actuals, frcnn_reg_predictions])
         frcnn_cls_loss_layer = Lambda(helpers.frcnn_cls_loss, name=loss_names[3])([frcnn_cls_actuals, frcnn_cls_predictions])
         #
-        frcnn_model = Model(inputs=[input_img, input_anchors, input_gt_boxes, input_gt_labels,
+        frcnn_model = Model(inputs=[input_img, input_gt_boxes, input_gt_labels,
                               rpn_reg_actuals, rpn_cls_actuals],
                       outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
                                frcnn_reg_predictions, frcnn_cls_predictions,
@@ -221,7 +221,7 @@ def get_model(base_model, rpn_model, hyper_params, mode="training"):
             frcnn_model.add_metric(layer.output, name=layer_name, aggregation="mean")
         #
     else:
-        frcnn_model = Model(inputs=[input_img, input_anchors],
+        frcnn_model = Model(inputs=[input_img],
                       outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
                                frcnn_reg_predictions, frcnn_cls_predictions])
         #
@@ -238,9 +238,8 @@ def init_model(model, hyper_params):
     img = tf.random.uniform((1, final_height, final_width, 3))
     output_height, output_width = final_height // hyper_params["stride"], final_width // hyper_params["stride"]
     total_anchors = output_height * output_width * hyper_params["anchor_count"]
-    anchors = tf.random.uniform((1, total_anchors, 4))
     gt_boxes = tf.random.uniform((1, 1, 4))
     gt_labels = tf.random.uniform((1, 1), maxval=hyper_params["total_labels"], dtype=tf.int32)
     bbox_deltas = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"] * 4))
     bbox_labels = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"]), maxval=hyper_params["total_labels"], dtype=tf.int32)
-    model([img, anchors, gt_boxes, gt_labels, bbox_deltas, bbox_labels])
+    model([img, gt_boxes, gt_labels, bbox_deltas, bbox_labels])

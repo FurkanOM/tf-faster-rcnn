@@ -30,7 +30,8 @@ base_model = VGG16(include_top=False)
 if hyper_params["stride"] == 16:
     base_model = Sequential(base_model.layers[:-1])
 rpn_model = rpn.get_model(base_model, hyper_params)
-frcnn_model = faster_rcnn.get_model(base_model, rpn_model, hyper_params, mode=mode)
+anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
+frcnn_model = faster_rcnn.get_model(base_model, rpn_model, anchors, hyper_params, mode=mode)
 #
 frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
 frcnn_model.load_weights(frcnn_model_path)
@@ -42,8 +43,9 @@ total_labels = hyper_params["total_labels"]
 
 for image_data in VOC_test_data:
     img, _, _ = image_data
-    input_img, anchors = rpn.get_step_data(image_data, hyper_params, preprocess_input, mode=mode)
-    frcnn_pred = frcnn_model.predict_on_batch([input_img, anchors])
+    input_img = preprocess_input(img)
+    input_img = tf.image.convert_image_dtype(input_img, tf.float32)
+    frcnn_pred = frcnn_model.predict_on_batch(input_img)
     roi_bboxes, rpn_reg_pred, rpn_cls_pred, frcnn_reg_pred, frcnn_cls_pred = frcnn_pred
     frcnn_reg_pred = tf.reshape(frcnn_reg_pred, (batch_size, tf.shape(frcnn_reg_pred)[1], total_labels, 4))
     # We remove background predictions and reshape outputs for non max suppression

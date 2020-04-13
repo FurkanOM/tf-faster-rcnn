@@ -34,15 +34,16 @@ padded_shapes, padding_values = helpers.get_padded_batch_params()
 VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
-frcnn_train_feed = faster_rcnn.generator(VOC_train_data, hyper_params, preprocess_input)
-frcnn_val_feed = faster_rcnn.generator(VOC_val_data, hyper_params, preprocess_input)
+anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
+frcnn_train_feed = faster_rcnn.generator(VOC_train_data, anchors, hyper_params, preprocess_input)
+frcnn_val_feed = faster_rcnn.generator(VOC_val_data, anchors, hyper_params, preprocess_input)
 
 base_model = VGG16(include_top=False)
 if hyper_params["stride"] == 16:
     base_model = Sequential(base_model.layers[:-1])
 #
 rpn_model = rpn.get_model(base_model, hyper_params)
-frcnn_model = faster_rcnn.get_model(base_model, rpn_model, hyper_params)
+frcnn_model = faster_rcnn.get_model(base_model, rpn_model, anchors, hyper_params)
 frcnn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                     loss=[None] * len(frcnn_model.output))
 faster_rcnn.init_model(frcnn_model, hyper_params)

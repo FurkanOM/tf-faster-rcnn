@@ -31,12 +31,11 @@ def generate_base_anchors(hyper_params):
             base_anchors.append([y_min, x_min, y_max, x_max])
     return np.array(base_anchors, dtype=np.float32)
 
-def generate_anchors(img_params, hyper_params):
+def generate_anchors(image_height, image_width, hyper_params):
     """Broadcasting base_anchors and generating all anchors for given image parameters.
     inputs:
-        img_params = (image height, image width, image output height, image output width)
-            these output values need to be calculated for used backbone,
-            for VGG16 output dimensions = dimension (height or width) // stride
+        image_height = height of the image
+        image_width = width of the image
         hyper_params = dictionary
 
     outputs:
@@ -45,13 +44,13 @@ def generate_anchors(img_params, hyper_params):
     """
     anchor_count = hyper_params["anchor_count"]
     stride = hyper_params["stride"]
-    height, width, output_height, output_width = img_params
+    output_height, output_width = image_height // stride, image_width // stride
     #
     grid_x = np.arange(0, output_width) * stride
     grid_y = np.arange(0, output_height) * stride
     #
-    width_padding = (width - output_width * stride) / 2
-    height_padding = (height - output_height * stride) / 2
+    width_padding = (image_width - output_width * stride) / 2
+    height_padding = (image_height - output_height * stride) / 2
     grid_x = width_padding + grid_x
     grid_y = height_padding + grid_y
     #
@@ -64,14 +63,16 @@ def generate_anchors(img_params, hyper_params):
     anchors = base_anchors.reshape((1, anchor_count, 4)) + \
               grid_map.reshape((1, output_area, 4)).transpose((1, 0, 2))
     anchors = anchors.reshape((output_area * anchor_count, 4)).astype(np.float32)
-    anchors = helpers.normalize_bboxes(anchors, height, width)
+    anchors = helpers.normalize_bboxes(anchors, image_height, image_width)
     anchors = np.clip(anchors, 0, 1)
     return anchors
 
-def generator(dataset, hyper_params, input_processor):
+def generator(dataset, anchors, hyper_params, input_processor):
     """Tensorflow data generator for fit method, yielding inputs and outputs.
     inputs:
         dataset = tf.data.Dataset, PaddedBatchDataset
+        anchors = (total_anchors, [y1, x1, y2, x2])
+            these values in normalized format between [0, 1]
         hyper_params = dictionary
         input_processor = function for preparing image for input. It's getting from backbone.
 
@@ -80,10 +81,10 @@ def generator(dataset, hyper_params, input_processor):
     """
     while True:
         for image_data in dataset:
-            input_img, bbox_deltas, bbox_labels, _ = get_step_data(image_data, hyper_params, input_processor)
+            input_img, bbox_deltas, bbox_labels = get_step_data(image_data, anchors, hyper_params, input_processor)
             yield input_img, (bbox_deltas, bbox_labels)
 
-def get_step_data(image_data, hyper_params, input_processor, mode="training"):
+def get_step_data(image_data, anchors, hyper_params, input_processor):
     """Generating one step data for training or inference.
     Batch operations supported.
     inputs:
@@ -92,37 +93,27 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
             gt_boxes (batch_size, gt_box_size, [y1, x1, y2, x2])
                 these values in normalized format between [0, 1]
             gt_labels (batch_size, gt_box_size)
+        anchors = (total_anchors, [y1, x1, y2, x2])
+            these values in normalized format between [0, 1]
         hyper_params = dictionary
         input_processor = function for preparing image for input. It's getting from backbone.
-        mode = "training" or "inference"
 
     outputs:
         input_img = (batch_size, height, width, channels)
             preprocessed image using input_processor
         bbox_deltas = (batch_size, output_height, output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
-            actual outputs for rpn, generating only training mode
         bbox_labels = (batch_size, output_height, output_width, anchor_count)
-            actual outputs for rpn, generating only training mode
-        anchors = (batch_size, output_height * output_width * anchor_count, [y1, x1, y2, x2])
     """
     img, gt_boxes, gt_labels = image_data
-    batch_size = tf.shape(img)[0]
+    batch_size, image_height, image_width = tf.shape(img)[0], tf.shape(img)[1], tf.shape(img)[2]
     input_img = input_processor(img)
     input_img = tf.image.convert_image_dtype(input_img, tf.float32)
     stride = hyper_params["stride"]
     anchor_count = hyper_params["anchor_count"]
     total_pos_bboxes = hyper_params["total_pos_bboxes"]
     total_neg_bboxes = hyper_params["total_neg_bboxes"]
-    total_bboxes = total_pos_bboxes + total_neg_bboxes
-    img_params = helpers.get_image_params(img, stride)
-    height, width, output_height, output_width = img_params
-    total_anchors = output_height * output_width * anchor_count
-    anchors = generate_anchors(img_params, hyper_params)
-    # We use same anchors for each batch so we multiplied anchors to the batch size
-    anchors = tf.tile(tf.expand_dims(anchors, 0), (batch_size, 1, 1))
-    if mode != "training":
-        return input_img, anchors
-    ################################################################################################################
+    output_height, output_width = image_height // stride, image_width // stride
+    total_anchors = anchors.shape[0]
     # Calculate iou values between each bboxes and ground truth boxes
     iou_map = helpers.generate_iou_map(anchors, gt_boxes)
     # Get max index value for each row
@@ -151,7 +142,7 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
     bbox_labels = tf.reshape(bbox_labels, (batch_size, output_height, output_width, anchor_count))
     #
-    return input_img, bbox_deltas, bbox_labels, anchors
+    return input_img, bbox_deltas, bbox_labels
 
 def get_model(base_model, hyper_params):
     """Generating rpn model for given backbone base model and hyper params.

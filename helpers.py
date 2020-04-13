@@ -180,25 +180,6 @@ def preprocessing(image_data, max_height, max_width):
     gt_labels = tf.cast(image_data["objects"]["label"] + 1, tf.int32)
     return img, gt_boxes, gt_labels
 
-def get_image_params(batch_img, stride):
-    """Generating image output width and height values using stride value.
-    This method should be updated for backbones.
-    It's only supporting VGG16 backbone for now.
-    inputs:
-        batch_img = (batch_size, height, width, channels)
-        stride = 16 or 32 for now
-
-    outputs:
-        height = image height
-        width = image width
-        output_height = image output height for backbone
-        output_width = image output width for backbone
-    """
-    img_shape = tf.shape(batch_img)
-    height, width = img_shape[1], img_shape[2]
-    output_height, output_width = height // stride, width // stride
-    return height, width, output_height, output_width
-
 def non_max_suppression(pred_bboxes, pred_labels, **kwargs):
     """Applying non maximum suppression.
     Details could be found on tensorflow documentation.
@@ -286,11 +267,11 @@ def generate_iou_map(bboxes, gt_boxes):
     outputs:
         iou_map = (batch_size, total_bboxes, total_gt_boxes)
     """
-    bbox_y1, bbox_x1, bbox_y2, bbox_x2 = tf.split(bboxes, 4, axis=2)
-    gt_y1, gt_x1, gt_y2, gt_x2 = tf.split(gt_boxes, 4, axis=2)
+    bbox_y1, bbox_x1, bbox_y2, bbox_x2 = tf.split(bboxes, 4, axis=-1)
+    gt_y1, gt_x1, gt_y2, gt_x2 = tf.split(gt_boxes, 4, axis=-1)
     # Calculate bbox and ground truth boxes areas
-    gt_area = tf.squeeze((gt_y2 - gt_y1) * (gt_x2 - gt_x1), axis=2)
-    bbox_area = tf.squeeze((bbox_y2 - bbox_y1) * (bbox_x2 - bbox_x1), axis=2)
+    gt_area = tf.squeeze((gt_y2 - gt_y1) * (gt_x2 - gt_x1), axis=-1)
+    bbox_area = tf.squeeze((bbox_y2 - bbox_y1) * (bbox_x2 - bbox_x1), axis=-1)
     #
     x_top = tf.maximum(bbox_x1, tf.transpose(gt_x1, [0, 2, 1]))
     y_top = tf.maximum(bbox_y1, tf.transpose(gt_y1, [0, 2, 1]))
@@ -299,7 +280,7 @@ def generate_iou_map(bboxes, gt_boxes):
     ### Calculate intersection area
     intersection_area = tf.maximum(x_bottom - x_top, 0) * tf.maximum(y_bottom - y_top, 0)
     ### Calculate union area
-    union_area = (tf.expand_dims(bbox_area, 2) + tf.expand_dims(gt_area, 1) - intersection_area)
+    union_area = (tf.expand_dims(bbox_area, -1) + tf.expand_dims(gt_area, 1) - intersection_area)
     # Intersection over Union
     return intersection_area / union_area
 

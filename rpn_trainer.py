@@ -33,6 +33,7 @@ padded_shapes, padding_values = helpers.get_padded_batch_params()
 VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
+anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
 rpn_train_feed = rpn.generator(VOC_train_data, hyper_params, preprocess_input)
 rpn_val_feed = rpn.generator(VOC_val_data, hyper_params, preprocess_input)
 
