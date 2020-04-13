@@ -44,6 +44,7 @@ rpn_model = rpn.get_model(base_model, hyper_params)
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, hyper_params)
 frcnn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                     loss=[None] * len(frcnn_model.output))
+faster_rcnn.init_model(frcnn_model, hyper_params)
 # If you have pretrained rpn model
 # You can load rpn weights for faster training
 rpn_load_weights = False

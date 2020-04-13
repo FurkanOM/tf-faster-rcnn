@@ -108,6 +108,7 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     img, gt_boxes, gt_labels = image_data
     batch_size = tf.shape(img)[0]
     input_img = input_processor(img)
+    input_img = tf.image.convert_image_dtype(input_img, tf.float32)
     stride = hyper_params["stride"]
     anchor_count = hyper_params["anchor_count"]
     total_pos_bboxes = hyper_params["total_pos_bboxes"]
@@ -118,29 +119,34 @@ def get_step_data(image_data, hyper_params, input_processor, mode="training"):
     total_anchors = output_height * output_width * anchor_count
     anchors = generate_anchors(img_params, hyper_params)
     # We use same anchors for each batch so we multiplied anchors to the batch size
-    anchors = tf.reshape(tf.tile(anchors, (batch_size, 1)), (batch_size, total_anchors, 4))
+    anchors = tf.tile(tf.expand_dims(anchors, 0), (batch_size, 1, 1))
     if mode != "training":
         return input_img, anchors
     ################################################################################################################
-    pos_bbox_indices, neg_bbox_indices, gt_box_indices = helpers.get_selected_indices(anchors, gt_boxes, total_pos_bboxes, total_neg_bboxes)
+    # Calculate iou values between each bboxes and ground truth boxes
+    iou_map = helpers.generate_iou_map(anchors, gt_boxes)
+    # Get max index value for each row
+    max_indices_each_gt_box = tf.argmax(iou_map, axis=2, output_type=tf.int32)
+    # IoU map has iou values for every gt boxes and we merge these values column wise
+    merged_iou_map = tf.reduce_max(iou_map, axis=2)
+    # Sorted iou values
+    sorted_iou_map = tf.argsort(merged_iou_map, direction="DESCENDING")
+    # Sort indices for generating masks
+    sorted_map_indices = tf.argsort(sorted_iou_map)
+    # Generate pos mask for pos bboxes
+    pos_mask = tf.less(sorted_map_indices, total_pos_bboxes)
+    # Generate neg mask for neg bboxes
+    neg_mask = tf.greater(sorted_map_indices, (total_anchors-1) - total_neg_bboxes)
+    # Generate pos and negative labels
+    pos_labels = tf.where(pos_mask, tf.ones_like(pos_mask, dtype=tf.float32), tf.constant(-1.0, dtype=tf.float32))
+    neg_labels = tf.cast(neg_mask, dtype=tf.float32)
+    bbox_labels = tf.add(pos_labels, neg_labels)
     #
-    gt_boxes_map = helpers.get_gt_boxes_map(gt_boxes, gt_box_indices, batch_size, total_neg_bboxes)
-    #
-    pos_labels_map = tf.ones((batch_size, total_pos_bboxes), tf.int32)
-    neg_labels_map = tf.zeros((batch_size, total_neg_bboxes), tf.int32)
-    gt_labels_map = tf.concat([pos_labels_map, neg_labels_map], axis=1)
-    #
-    bbox_indices = tf.concat([pos_bbox_indices, neg_bbox_indices], axis=1)
-    #
-    flatted_batch_indices = helpers.get_tiled_indices(batch_size, total_bboxes)
-    flatted_bbox_indices = tf.reshape(bbox_indices, (-1, 1))
-    scatter_indices = helpers.get_scatter_indices_for_bboxes([flatted_batch_indices, flatted_bbox_indices], batch_size, total_bboxes)
-    expanded_gt_boxes = tf.scatter_nd(scatter_indices, gt_boxes_map, tf.shape(anchors))
-    #
+    gt_boxes_map = tf.gather(gt_boxes, max_indices_each_gt_box, batch_dims=1)
+    # Replace negative bboxes with zeros
+    expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, -1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
+    # Calculate delta values between anchors and ground truth bboxes
     bbox_deltas = helpers.get_deltas_from_bboxes(anchors, expanded_gt_boxes)
-    #
-    bbox_labels = tf.negative(tf.ones((batch_size, total_anchors), tf.int32))
-    bbox_labels = tf.tensor_scatter_nd_update(bbox_labels, scatter_indices, gt_labels_map)
     #
     bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
     bbox_labels = tf.reshape(bbox_labels, (batch_size, output_height, output_width, anchor_count))

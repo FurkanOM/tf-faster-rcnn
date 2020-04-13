@@ -33,17 +33,28 @@ rpn_model = rpn.get_model(base_model, hyper_params)
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, hyper_params, mode=mode)
 #
 frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
-frcnn_model.load_weights(frcnn_model_path)
+#frcnn_model.load_weights(frcnn_model_path)
+
+background_label = "bg"
+labels = [background_label] + labels
+bg_id = labels.index(background_label)
+total_labels = hyper_params["total_labels"]
 
 for image_data in VOC_test_data:
-    img, gt_boxes, gt_labels = image_data
+    img, _, _ = image_data
     input_img, anchors = rpn.get_step_data(image_data, hyper_params, preprocess_input, mode=mode)
-    frcnn_pred = frcnn_model.predict_on_batch([input_img, anchors, gt_boxes])
+    frcnn_pred = frcnn_model.predict_on_batch([input_img, anchors])
     roi_bboxes, rpn_reg_pred, rpn_cls_pred, frcnn_reg_pred, frcnn_cls_pred = frcnn_pred
+    frcnn_reg_pred = tf.reshape(frcnn_reg_pred, (batch_size, tf.shape(frcnn_reg_pred)[1], total_labels, 4))
     # We remove background predictions and reshape outputs for non max suppression
-    valid_pred_bboxes, valid_pred_labels = faster_rcnn.get_valid_predictions(roi_bboxes, frcnn_reg_pred, frcnn_cls_pred, hyper_params["total_labels"])
-
-    nms_bboxes, nmsed_scores, nmsed_classes, valid_detections = helpers.non_max_suppression(valid_pred_bboxes, valid_pred_labels,
+    frcnn_cls_pred = tf.cast(frcnn_cls_pred, tf.float32)
+    pred_labels_map = tf.argmax(frcnn_cls_pred, 2, output_type=tf.int32)
+    valid_cond = tf.not_equal(pred_labels_map, bg_id)
+    #
+    valid_bboxes = tf.expand_dims(frcnn_reg_pred[valid_cond], 0)
+    valid_labels = tf.expand_dims(frcnn_cls_pred[valid_cond], 0)
+    #
+    nms_bboxes, nmsed_scores, nmsed_classes, valid_detections = helpers.non_max_suppression(valid_bboxes, valid_labels,
                                                                                             max_output_size_per_class=3,
                                                                                             max_total_size=12, score_threshold=0.7)
     helpers.draw_bboxes_with_labels(img[0], nms_bboxes[0], nmsed_classes[0], nmsed_scores[0], labels)

@@ -38,7 +38,7 @@ model_path = frcnn_model_path if load_weights_from_frcnn else rpn_model_path
 rpn_model.load_weights(model_path, by_name=True)
 
 for image_data in VOC_test_data:
-    img, gt_boxes, gt_labels = image_data
+    img, _, _ = image_data
     input_img, anchors = rpn.get_step_data(image_data, hyper_params, preprocess_input, mode="inference")
     rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(input_img)
     #
