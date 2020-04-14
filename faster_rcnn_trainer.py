@@ -43,16 +43,6 @@ if hyper_params["stride"] == 16:
     base_model = Sequential(base_model.layers[:-1])
 #
 rpn_model = rpn.get_model(base_model, hyper_params)
-"""
-for image_data in VOC_train_data:
-    input_img, actual_deltas, actual_labels = rpn.get_step_data(image_data, anchors, hyper_params, preprocess_input)
-    rpn_deltas, rpn_labels = rpn_model(input_img)
-    helpers.rpn_reg_loss(actual_deltas, rpn_deltas)
-    roi_bboxes = faster_rcnn.roibbox(anchors, hyper_params, rpn_deltas, rpn_labels)
-    faster_rcnn.roidelta(roi_bboxes, gt_boxes, gt_labels, hyper_params)
-    faster_rcnn.roipooling(base_model.output, roi_bboxes, hyper_params)
-    break
-"""
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, anchors, hyper_params)
 frcnn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                     loss=[None] * len(frcnn_model.output))
