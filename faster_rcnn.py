@@ -6,10 +6,84 @@ import numpy as np
 import helpers
 import rpn
 
+def roibbox(anchors, hyper_params, rpn_bbox_deltas, rpn_labels):
+    pre_nms_topn = hyper_params["pre_nms_topn"]
+    post_nms_topn = hyper_params["post_nms_topn"]
+    nms_iou_threshold = hyper_params["nms_iou_threshold"]
+    total_anchors = anchors.shape[0]
+    batch_size = tf.shape(rpn_bbox_deltas)[0]
+    rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
+    rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors))
+    rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
+    #
+    _, pre_indices = tf.nn.top_k(rpn_labels, pre_nms_topn)
+    #
+    pre_roi_bboxes = tf.gather(rpn_bboxes, pre_indices, batch_dims=1)
+    pre_roi_labels = tf.gather(rpn_labels, pre_indices, batch_dims=1)
+    #
+    pre_roi_bboxes = tf.reshape(pre_roi_bboxes, (batch_size, pre_nms_topn, 1, 4))
+    pre_roi_labels = tf.reshape(pre_roi_labels, (batch_size, pre_nms_topn, 1))
+    #
+    roi_bboxes, _, _, _ = helpers.non_max_suppression(pre_roi_bboxes, pre_roi_labels,
+                                                      max_output_size_per_class=post_nms_topn,
+                                                      max_total_size=post_nms_topn,
+                                                      iou_threshold=nms_iou_threshold)
+    return roi_bboxes
+
+def roidelta(roi_bboxes, gt_boxes, gt_labels, hyper_params):
+    total_labels = hyper_params["total_labels"]
+    total_pos_bboxes = hyper_params["total_pos_bboxes"]
+    batch_size, total_bboxes = tf.shape(roi_bboxes)[0], tf.shape(roi_bboxes)[1]
+    # Calculate iou values between each bboxes and ground truth boxes
+    iou_map = helpers.generate_iou_map(roi_bboxes, gt_boxes)
+    # Get max index value for each row
+    max_indices_each_gt_box = tf.argmax(iou_map, axis=2, output_type=tf.int32)
+    # IoU map has iou values for every gt boxes and we merge these values column wise
+    merged_iou_map = tf.reduce_max(iou_map, axis=2)
+    # Sorted iou values
+    sorted_iou_map = tf.argsort(merged_iou_map, direction="DESCENDING")
+    # Sort indices for generating masks
+    sorted_map_indices = tf.argsort(sorted_iou_map)
+    # Generate pos mask for pos bboxes
+    pos_mask = tf.less(sorted_map_indices, total_pos_bboxes)
+    #
+    gt_boxes_map = tf.gather(gt_boxes, max_indices_each_gt_box, batch_dims=1)
+    expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, axis=-1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
+    #
+    gt_labels_map = tf.gather(gt_labels, max_indices_each_gt_box, batch_dims=1)
+    expanded_gt_labels = tf.where(pos_mask, gt_labels_map, tf.zeros_like(gt_labels_map))
+    #
+    roi_bbox_deltas = helpers.get_deltas_from_bboxes(roi_bboxes, expanded_gt_boxes)
+    #
+    roi_bbox_labels = tf.one_hot(expanded_gt_labels, total_labels)
+    scatter_indices = tf.tile(tf.expand_dims(roi_bbox_labels, -1), (1, 1, 1, 4))
+    roi_bbox_deltas = scatter_indices * tf.expand_dims(roi_bbox_deltas, -2)
+    roi_bbox_deltas = tf.reshape(roi_bbox_deltas, (batch_size, total_bboxes, total_labels * 4))
+    return roi_bbox_deltas, roi_bbox_labels
+
+def roipooling(feature_map, roi_bboxes, hyper_params):
+    pooling_size = hyper_params["pooling_size"]
+    batch_size, total_bboxes = tf.shape(roi_bboxes)[0], tf.shape(roi_bboxes)[1]
+    #
+    row_size = batch_size * total_bboxes
+    # We need to arange bbox indices for each batch
+    pooling_bbox_indices = tf.tile(tf.expand_dims(tf.range(batch_size), axis=1), (1, total_bboxes))
+    pooling_bbox_indices = tf.reshape(pooling_bbox_indices, (-1, ))
+    pooling_bboxes = tf.reshape(roi_bboxes, (row_size, 4))
+    # Crop to bounding box size then resize to pooling size
+    pooling_feature_map = tf.image.crop_and_resize(
+        feature_map,
+        pooling_bboxes,
+        pooling_bbox_indices,
+        pooling_size
+    )
+    final_pooling_feature_map = tf.reshape(pooling_feature_map, (batch_size, total_bboxes, pooling_feature_map.shape[1], pooling_feature_map.shape[2], pooling_feature_map.shape[3]))
+    return final_pooling_feature_map
+
 class RoIBBox(Layer):
     """Generating bounding boxes from rpn predictions.
     First calculating the boxes from predicted deltas and label probs.
-    Then applied non max suppression and selecting "nms_topn" boxes.
+    Then applied non max suppression and selecting "post_nms_topn" boxes.
     inputs:
         rpn_bbox_deltas = (batch_size, img_output_height, img_output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
             img_output_height and img_output_width are calculated to the base model output
@@ -17,7 +91,7 @@ class RoIBBox(Layer):
         rpn_labels = (batch_size, img_output_height, img_output_width, anchor_count)
 
     outputs:
-        roi_bboxes = (batch_size, nms_topn, [y1, x1, y2, x2])
+        roi_bboxes = (batch_size, post_nms_topn, [y1, x1, y2, x2])
     """
 
     def __init__(self, anchors, hyper_params, **kwargs):
@@ -35,17 +109,27 @@ class RoIBBox(Layer):
         rpn_labels = inputs[1]
         anchors = self.anchors
         #
-        total_pos_bboxes = self.hyper_params["total_pos_bboxes"]
+        pre_nms_topn = self.hyper_params["pre_nms_topn"]
+        post_nms_topn = self.hyper_params["post_nms_topn"]
+        nms_iou_threshold = self.hyper_params["nms_iou_threshold"]
         total_anchors = anchors.shape[0]
         batch_size = tf.shape(rpn_bbox_deltas)[0]
         rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
-        rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors, 1))
-        #
+        rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors))
         rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
-        rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, total_anchors, 1, 4))
-        roi_bboxes, _, _, _ = helpers.non_max_suppression(rpn_bboxes, rpn_labels,
-                                                          max_output_size_per_class=total_pos_bboxes * 2,
-                                                          max_total_size=self.hyper_params["nms_topn"])
+        #
+        _, pre_indices = tf.nn.top_k(rpn_labels, pre_nms_topn)
+        #
+        pre_roi_bboxes = tf.gather(rpn_bboxes, pre_indices, batch_dims=1)
+        pre_roi_labels = tf.gather(rpn_labels, pre_indices, batch_dims=1)
+        #
+        pre_roi_bboxes = tf.reshape(pre_roi_bboxes, (batch_size, pre_nms_topn, 1, 4))
+        pre_roi_labels = tf.reshape(pre_roi_labels, (batch_size, pre_nms_topn, 1))
+        #
+        roi_bboxes, _, _, _ = helpers.non_max_suppression(pre_roi_bboxes, pre_roi_labels,
+                                                          max_output_size_per_class=post_nms_topn,
+                                                          max_total_size=post_nms_topn,
+                                                          iou_threshold=nms_iou_threshold)
         #
         return tf.stop_gradient(roi_bboxes)
 
@@ -102,7 +186,7 @@ class RoIDelta(Layer):
         roi_bbox_labels = tf.one_hot(expanded_gt_labels, total_labels)
         scatter_indices = tf.tile(tf.expand_dims(roi_bbox_labels, -1), (1, 1, 1, 4))
         roi_bbox_deltas = scatter_indices * tf.expand_dims(roi_bbox_deltas, -2)
-        roi_bbox_deltas = tf.reshape(roi_bbox_deltas, (batch_size, total_bboxes, total_labels * 4))
+        roi_bbox_deltas = tf.reshape(roi_bbox_deltas, (batch_size, total_bboxes * total_labels, 4))
         #
         return tf.stop_gradient(roi_bbox_deltas), tf.stop_gradient(roi_bbox_labels)
 
@@ -198,7 +282,7 @@ def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
         input_gt_boxes = Input(shape=(None, 4), name="input_gt_boxes", dtype=tf.float32)
         input_gt_labels = Input(shape=(None, ), name="input_gt_labels", dtype=tf.int32)
         rpn_cls_actuals = Input(shape=(None, None, hyper_params["anchor_count"]), name="input_rpn_cls_actuals", dtype=tf.float32)
-        rpn_reg_actuals = Input(shape=(None, None, hyper_params["anchor_count"] * 4), name="input_rpn_reg_actuals", dtype=tf.float32)
+        rpn_reg_actuals = Input(shape=(None, 4), name="input_rpn_reg_actuals", dtype=tf.float32)
         frcnn_reg_actuals, frcnn_cls_actuals = RoIDelta(hyper_params, name="roi_deltas")(
                                                         [roi_bboxes, input_gt_boxes, input_gt_labels])
         #
@@ -240,6 +324,6 @@ def init_model(model, hyper_params):
     total_anchors = output_height * output_width * hyper_params["anchor_count"]
     gt_boxes = tf.random.uniform((1, 1, 4))
     gt_labels = tf.random.uniform((1, 1), maxval=hyper_params["total_labels"], dtype=tf.int32)
-    bbox_deltas = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"] * 4))
-    bbox_labels = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"]), maxval=hyper_params["total_labels"], dtype=tf.int32)
+    bbox_deltas = tf.random.uniform((1, output_height*output_width*hyper_params["anchor_count"], 4))
+    bbox_labels = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"]), maxval=1, dtype=tf.float32)
     model([img, gt_boxes, gt_labels, bbox_deltas, bbox_labels])

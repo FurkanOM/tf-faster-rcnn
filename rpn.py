@@ -139,7 +139,7 @@ def get_step_data(image_data, anchors, hyper_params, input_processor):
     # Calculate delta values between anchors and ground truth bboxes
     bbox_deltas = helpers.get_deltas_from_bboxes(anchors, expanded_gt_boxes)
     #
-    bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
+    # bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
     bbox_labels = tf.reshape(bbox_labels, (batch_size, output_height, output_width, anchor_count))
     #
     return input_img, bbox_deltas, bbox_labels

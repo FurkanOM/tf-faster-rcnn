@@ -13,7 +13,7 @@ if args.handle_gpu:
 batch_size = 1
 # If you have trained faster rcnn model you can load weights from faster rcnn model
 load_weights_from_frcnn = False
-hyper_params = helpers.get_hyper_params(nms_topn=10)
+hyper_params = helpers.get_hyper_params(post_nms_topn=10)
 
 VOC_test_data, VOC_info = helpers.get_dataset("voc/2007", "test")
 labels = helpers.get_labels(VOC_info)
@@ -54,7 +54,7 @@ for image_data in VOC_test_data:
     rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, anchor_row_size, 1, 4))
     #
     nms_bboxes, _, _, _ = helpers.non_max_suppression(rpn_bboxes, rpn_labels,
-                                                max_output_size_per_class=hyper_params["nms_topn"],
-                                                max_total_size=hyper_params["nms_topn"])
+                                                max_output_size_per_class=hyper_params["post_nms_topn"],
+                                                max_total_size=hyper_params["post_nms_topn"])
     img_float32 = tf.image.convert_image_dtype(img, tf.float32)
     helpers.draw_bboxes(img_float32, nms_bboxes)

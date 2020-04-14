@@ -44,7 +44,7 @@ def rpn_cls_loss(*args):
     return lf(target, output)
 
 def reg_loss(*args):
-    """Calculating rpn/faster rcnn regression loss value.
+    """Calculating rpn / faster rcnn regression loss value.
     Reg value should be different than zero for actual values.
     Because of this we only take into account non zero values.
     inputs:
@@ -54,12 +54,19 @@ def reg_loss(*args):
         loss = Huber it's almost the same with the smooth L1 loss
     """
     y_true, y_pred = args if len(args) == 2 else args[0]
-    indices = tf.where(tf.not_equal(y_true, 0))
-    target = tf.gather_nd(y_true, indices)
-    output = tf.gather_nd(y_pred, indices)
-    # # Same with the smooth l1 loss
-    lf = tf.losses.Huber()
-    return lf(target, output)
+    y_pred = tf.reshape(y_pred, (tf.shape(y_pred)[0], -1, 4))
+    #
+    loss_fn = tf.losses.Huber(reduction=tf.losses.Reduction.NONE)
+    loss_for_all = loss_fn(y_true, y_pred)
+    loss_for_all = tf.reduce_sum(loss_for_all, axis=-1)
+    #
+    pos_cond = tf.reduce_any(tf.not_equal(y_true, tf.constant(0.0)), axis=-1)
+    pos_mask = tf.cast(pos_cond, dtype=tf.float32)
+    total_pos_bboxes = tf.reduce_sum(pos_mask, axis=1)
+    #
+    loc_loss = tf.reduce_sum(pos_mask * loss_for_all, axis=-1)
+    total_pos_bboxes = tf.where(tf.equal(total_pos_bboxes, tf.constant(0.0)), tf.constant(1.0), total_pos_bboxes)
+    return tf.reduce_mean(loc_loss / total_pos_bboxes)
 
 def get_model_path(model_type, stride):
     """Generating model path from stride value for save/load model weights.
@@ -81,18 +88,18 @@ def get_hyper_params(**kwargs):
     inputs:
         **kwargs = any value could be updated in the hyper_params
             stride => should be 16 or 32
-            nms_topn => should be <= (total_pos_bboxes + total_neg_bboxes) * 2
-
     outputs:
         hyper_params = dictionary
     """
     hyper_params = {
         "anchor_ratios": [0.5, 1, 2],
         "anchor_scales": [16, 32, 64, 128, 256],
-        "stride": 32,
-        "nms_topn": 300,
-        "total_pos_bboxes": 64,
-        "total_neg_bboxes": 64,
+        "stride": 16,
+        "pre_nms_topn": 6000,
+        "post_nms_topn": 300,
+        "nms_iou_threshold": 0.7,
+        "total_pos_bboxes": 128,
+        "total_neg_bboxes": 128,
         "pooling_size": (7, 7),
     }
     for key, value in kwargs.items():
