@@ -112,6 +112,7 @@ def get_step_data(image_data, anchors, hyper_params, input_processor):
     anchor_count = hyper_params["anchor_count"]
     total_pos_bboxes = hyper_params["total_pos_bboxes"]
     total_neg_bboxes = hyper_params["total_neg_bboxes"]
+    variances = hyper_params["variances"]
     output_height, output_width = image_height // stride, image_width // stride
     total_anchors = anchors.shape[0]
     # Calculate iou values between each bboxes and ground truth boxes
@@ -137,7 +138,7 @@ def get_step_data(image_data, anchors, hyper_params, input_processor):
     # Replace negative bboxes with zeros
     expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, -1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
     # Calculate delta values between anchors and ground truth bboxes
-    bbox_deltas = helpers.get_deltas_from_bboxes(anchors, expanded_gt_boxes)
+    bbox_deltas = helpers.get_deltas_from_bboxes(anchors, expanded_gt_boxes) / variances
     #
     # bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
     bbox_labels = tf.reshape(bbox_labels, (batch_size, output_height, output_width, anchor_count))

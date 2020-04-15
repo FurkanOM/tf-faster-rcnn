@@ -48,6 +48,7 @@ for image_data in VOC_test_data:
     frcnn_pred = frcnn_model.predict_on_batch(input_img)
     roi_bboxes, rpn_reg_pred, rpn_cls_pred, frcnn_reg_pred, frcnn_cls_pred = frcnn_pred
     frcnn_reg_pred = tf.reshape(frcnn_reg_pred, (batch_size, tf.shape(frcnn_reg_pred)[1], total_labels, 4))
+    frcnn_reg_pred *= hyper_params["variances"]
     # We remove background predictions and reshape outputs for non max suppression
     frcnn_cls_pred = tf.cast(frcnn_cls_pred, tf.float32)
     pred_labels_map = tf.argmax(frcnn_cls_pred, 2, output_type=tf.int32)

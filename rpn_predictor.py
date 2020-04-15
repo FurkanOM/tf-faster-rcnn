@@ -47,6 +47,7 @@ for image_data in VOC_test_data:
     #
     total_anchors = anchors.shape[0]
     rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
+    rpn_bbox_deltas *= hyper_params["variances"]
     rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors, 1))
     #
     rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)

@@ -38,10 +38,13 @@ class RoIBBox(Layer):
         pre_nms_topn = self.hyper_params["pre_nms_topn"]
         post_nms_topn = self.hyper_params["post_nms_topn"]
         nms_iou_threshold = self.hyper_params["nms_iou_threshold"]
+        variances = self.hyper_params["variances"]
         total_anchors = anchors.shape[0]
         batch_size = tf.shape(rpn_bbox_deltas)[0]
         rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
         rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors))
+        #
+        rpn_bbox_deltas *= variances
         rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
         #
         _, pre_indices = tf.nn.top_k(rpn_labels, pre_nms_topn)
@@ -87,6 +90,7 @@ class RoIDelta(Layer):
         gt_labels = inputs[2]
         total_labels = self.hyper_params["total_labels"]
         total_pos_bboxes = self.hyper_params["total_pos_bboxes"]
+        variances = self.hyper_params["variances"]
         batch_size, total_bboxes = tf.shape(roi_bboxes)[0], tf.shape(roi_bboxes)[1]
         # Calculate iou values between each bboxes and ground truth boxes
         iou_map = helpers.generate_iou_map(roi_bboxes, gt_boxes)
@@ -107,7 +111,7 @@ class RoIDelta(Layer):
         gt_labels_map = tf.gather(gt_labels, max_indices_each_gt_box, batch_dims=1)
         expanded_gt_labels = tf.where(pos_mask, gt_labels_map, tf.zeros_like(gt_labels_map))
         #
-        roi_bbox_deltas = helpers.get_deltas_from_bboxes(roi_bboxes, expanded_gt_boxes)
+        roi_bbox_deltas = helpers.get_deltas_from_bboxes(roi_bboxes, expanded_gt_boxes) / variances
         #
         roi_bbox_labels = tf.one_hot(expanded_gt_labels, total_labels)
         scatter_indices = tf.tile(tf.expand_dims(roi_bbox_labels, -1), (1, 1, 1, 4))

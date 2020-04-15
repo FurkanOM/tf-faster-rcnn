@@ -47,7 +47,7 @@ def rpn_cls_loss(*args):
     indices = tf.where(tf.not_equal(y_true, tf.constant(-1.0, dtype=tf.float32)))
     target = tf.gather_nd(y_true, indices)
     output = tf.gather_nd(y_pred, indices)
-    lf = tf.losses.BinaryCrossentropy(tf.losses.Reduction.SUM)
+    lf = tf.losses.BinaryCrossentropy()
     return lf(target, output)
 
 def reg_loss(*args):
@@ -100,6 +100,7 @@ def get_hyper_params(**kwargs):
     hyper_params = {
         "anchor_ratios": [0.5, 1, 2],
         "anchor_scales": [16, 32, 64, 128, 256],
+        "variances": [0.1, 0.1, 0.2, 0.2],
         "stride": 16,
         "pre_nms_topn": 6000,
         "post_nms_topn": 300,
