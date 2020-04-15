@@ -34,8 +34,8 @@ VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_sh
 VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
 anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
-rpn_train_feed = rpn.generator(VOC_train_data, hyper_params, preprocess_input)
-rpn_val_feed = rpn.generator(VOC_val_data, hyper_params, preprocess_input)
+rpn_train_feed = rpn.generator(VOC_train_data, anchors, hyper_params, preprocess_input)
+rpn_val_feed = rpn.generator(VOC_val_data, anchors, hyper_params, preprocess_input)
 
 base_model = VGG16(include_top=False, weights="imagenet")
 if hyper_params["stride"] == 16:
@@ -43,8 +43,7 @@ if hyper_params["stride"] == 16:
 
 rpn_model = rpn.get_model(base_model, hyper_params)
 rpn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
-                  loss=[helpers.reg_loss, helpers.rpn_cls_loss],
-                  loss_weights=[10., 1.])
+                  loss=[helpers.reg_loss, helpers.rpn_cls_loss])
 # Load weights
 rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
 

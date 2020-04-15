@@ -57,6 +57,6 @@ for image_data in VOC_test_data:
     valid_labels = tf.expand_dims(frcnn_cls_pred[valid_cond], 0)
     #
     nms_bboxes, nmsed_scores, nmsed_classes, valid_detections = helpers.non_max_suppression(valid_bboxes, valid_labels,
-                                                                                            max_output_size_per_class=3,
-                                                                                            max_total_size=12, score_threshold=0.7)
+                                                                                            max_output_size_per_class=10,
+                                                                                            max_total_size=200, score_threshold=0.5)
     helpers.draw_bboxes_with_labels(img[0], nms_bboxes[0], nmsed_classes[0], nmsed_scores[0], labels)

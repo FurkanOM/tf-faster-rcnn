@@ -45,16 +45,14 @@ for image_data in VOC_test_data:
     input_img = tf.image.convert_image_dtype(input_img, tf.float32)
     rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(input_img)
     #
-    anchors_shape = tf.shape(anchors)
-    batch_size, anchor_row_size = anchors_shape[0], anchors_shape[1]
-    rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, anchor_row_size, 4))
-    rpn_labels = tf.reshape(rpn_labels, (batch_size, anchor_row_size, 1))
+    total_anchors = anchors.shape[0]
+    rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
+    rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors, 1))
     #
     rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
-    rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, anchor_row_size, 1, 4))
+    rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, total_anchors, 1, 4))
     #
     nms_bboxes, _, _, _ = helpers.non_max_suppression(rpn_bboxes, rpn_labels,
                                                 max_output_size_per_class=hyper_params["post_nms_topn"],
                                                 max_total_size=hyper_params["post_nms_topn"])
-    img_float32 = tf.image.convert_image_dtype(img, tf.float32)
-    helpers.draw_bboxes(img_float32, nms_bboxes)
+    helpers.draw_bboxes(input_img, nms_bboxes)

@@ -23,8 +23,15 @@ def frcnn_cls_loss(*args):
         loss = CategoricalCrossentropy value
     """
     y_true, y_pred = args if len(args) == 2 else args[0]
-    lf = tf.losses.CategoricalCrossentropy()
-    return lf(y_true, y_pred)
+    loss_fn = tf.losses.CategoricalCrossentropy(reduction=tf.losses.Reduction.NONE)
+    loss_for_all = loss_fn(y_true, y_pred)
+    #
+    cond = tf.reduce_any(tf.not_equal(y_true, tf.constant(0.0)), axis=-1)
+    mask = tf.cast(cond, dtype=tf.float32)
+    #
+    conf_loss = tf.reduce_sum(mask * loss_for_all)
+    total_boxes = tf.maximum(1.0, tf.reduce_sum(mask))
+    return conf_loss / total_boxes
 
 def rpn_cls_loss(*args):
     """Calculating rpn class loss value.
@@ -37,10 +44,10 @@ def rpn_cls_loss(*args):
         loss = BinaryCrossentropy value
     """
     y_true, y_pred = args if len(args) == 2 else args[0]
-    indices = tf.where(tf.not_equal(y_true, -1))
+    indices = tf.where(tf.not_equal(y_true, tf.constant(-1.0, dtype=tf.float32)))
     target = tf.gather_nd(y_true, indices)
     output = tf.gather_nd(y_pred, indices)
-    lf = tf.losses.BinaryCrossentropy()
+    lf = tf.losses.BinaryCrossentropy(tf.losses.Reduction.SUM)
     return lf(target, output)
 
 def reg_loss(*args):
@@ -62,11 +69,10 @@ def reg_loss(*args):
     #
     pos_cond = tf.reduce_any(tf.not_equal(y_true, tf.constant(0.0)), axis=-1)
     pos_mask = tf.cast(pos_cond, dtype=tf.float32)
-    total_pos_bboxes = tf.reduce_sum(pos_mask, axis=1)
     #
-    loc_loss = tf.reduce_sum(pos_mask * loss_for_all, axis=-1)
-    total_pos_bboxes = tf.where(tf.equal(total_pos_bboxes, tf.constant(0.0)), tf.constant(1.0), total_pos_bboxes)
-    return tf.reduce_mean(loc_loss / total_pos_bboxes)
+    loc_loss = tf.reduce_sum(pos_mask * loss_for_all)
+    total_pos_bboxes = tf.maximum(1.0, tf.reduce_sum(pos_mask))
+    return loc_loss / total_pos_bboxes
 
 def get_model_path(model_type, stride):
     """Generating model path from stride value for save/load model weights.

@@ -250,6 +250,6 @@ def init_model(model, hyper_params):
     total_anchors = output_height * output_width * hyper_params["anchor_count"]
     gt_boxes = tf.random.uniform((1, 1, 4))
     gt_labels = tf.random.uniform((1, 1), maxval=hyper_params["total_labels"], dtype=tf.int32)
-    bbox_deltas = tf.random.uniform((1, output_height*output_width*hyper_params["anchor_count"], 4))
+    bbox_deltas = tf.random.uniform((1, total_anchors, 4))
     bbox_labels = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"]), maxval=1, dtype=tf.float32)
     model([img, gt_boxes, gt_labels, bbox_deltas, bbox_labels])
