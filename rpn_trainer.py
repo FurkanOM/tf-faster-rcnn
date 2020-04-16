@@ -9,7 +9,7 @@ args = helpers.handle_args()
 if args.handle_gpu:
     helpers.handle_gpu_compatibility()
 
-batch_size = 8
+batch_size = 3
 epochs = 50
 load_weights = False
 hyper_params = helpers.get_hyper_params()
@@ -51,10 +51,15 @@ if load_weights:
     rpn_model.load_weights(rpn_model_path)
 
 checkpoint_callback = ModelCheckpoint(rpn_model_path, monitor="val_loss", save_best_only=True, save_weights_only=True)
+for image_data in VOC_train_data:
+    input_img, actual_deltas, actual_labels = rpn.get_step_data(image_data, anchors, hyper_params, preprocess_input)
 
+    break
+"""
 rpn_model.fit(rpn_train_feed,
               steps_per_epoch=step_size_train,
               validation_data=rpn_val_feed,
               validation_steps=step_size_val,
               epochs=epochs,
               callbacks=[checkpoint_callback])
+"""

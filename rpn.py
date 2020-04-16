@@ -84,6 +84,10 @@ def generator(dataset, anchors, hyper_params, input_processor):
             input_img, bbox_deltas, bbox_labels = get_step_data(image_data, anchors, hyper_params, input_processor)
             yield input_img, (bbox_deltas, bbox_labels)
 
+def randomly_select_n(mask, select_n):
+    valid_indices = tf.where(mask)
+
+
 def get_step_data(image_data, anchors, hyper_params, input_processor):
     """Generating one step data for training or inference.
     Batch operations supported.
@@ -118,23 +122,48 @@ def get_step_data(image_data, anchors, hyper_params, input_processor):
     # Calculate iou values between each bboxes and ground truth boxes
     iou_map = helpers.generate_iou_map(anchors, gt_boxes)
     # Get max index value for each row
-    max_indices_each_gt_box = tf.argmax(iou_map, axis=2, output_type=tf.int32)
+    max_indices_each_row = tf.argmax(iou_map, axis=2, output_type=tf.int32)
+    # Get max index value for each column
+    max_indices_each_column = tf.argmax(iou_map, axis=1, output_type=tf.int32)
     # IoU map has iou values for every gt boxes and we merge these values column wise
     merged_iou_map = tf.reduce_max(iou_map, axis=2)
-    # Sorted iou values
-    sorted_iou_map = tf.argsort(merged_iou_map, direction="DESCENDING")
-    # Sort indices for generating masks
-    sorted_map_indices = tf.argsort(sorted_iou_map)
-    # Generate pos mask for pos bboxes
-    pos_mask = tf.less(sorted_map_indices, total_pos_bboxes)
-    # Generate neg mask for neg bboxes
-    neg_mask = tf.greater(sorted_map_indices, (total_anchors-1) - total_neg_bboxes)
-    # Generate pos and negative labels
+    #
+    pos_mask = tf.greater(merged_iou_map, 0.7)
+    #
+    valid_indices_cond = tf.not_equal(gt_labels, -1)
+    valid_indices = tf.cast(tf.where(valid_indices_cond), tf.int32)
+    valid_max_indices = max_indices_each_column[valid_indices_cond]
+    #
+    scatter_bbox_indices = tf.stack([valid_indices[..., 0], valid_max_indices], 1)
+    max_pos_mask = tf.scatter_nd(scatter_bbox_indices, tf.fill((batch_size, ), True), tf.shape(pos_mask))
+    pos_mask = tf.logical_or(pos_mask, max_pos_mask)
+    pos_mask = randomly_select_n(pos_mask, tf.tile(tf.constant([total_pos_bboxes], dtype=tf.float32), (batch_size, )))
+    #
+    pos_count = tf.reduce_sum(tf.cast(pos_mask, tf.float32), axis=-1)
+    neg_count = (total_pos_bboxes + total_neg_bboxes) - pos_count
+    #
+    neg_mask = tf.logical_and(tf.less(merged_iou_map, 0.3), tf.logical_not(pos_mask))
+    neg_mask = randomly_select_n(neg_mask, neg_count)
+    #
     pos_labels = tf.where(pos_mask, tf.ones_like(pos_mask, dtype=tf.float32), tf.constant(-1.0, dtype=tf.float32))
     neg_labels = tf.cast(neg_mask, dtype=tf.float32)
     bbox_labels = tf.add(pos_labels, neg_labels)
+    import code
+    code.interact(local=locals())
+    # # Sorted iou values
+    # sorted_iou_map = tf.argsort(merged_iou_map, direction="DESCENDING")
+    # # Sort indices for generating masks
+    # sorted_map_indices = tf.argsort(sorted_iou_map)
+    # # Generate pos mask for pos bboxes
+    # pos_mask = tf.less(sorted_map_indices, total_pos_bboxes)
+    # # Generate neg mask for neg bboxes
+    # neg_mask = tf.greater(sorted_map_indices, (total_anchors-1) - total_neg_bboxes)
+    # # Generate pos and negative labels
+    # pos_labels = tf.where(pos_mask, tf.ones_like(pos_mask, dtype=tf.float32), tf.constant(-1.0, dtype=tf.float32))
+    # neg_labels = tf.cast(neg_mask, dtype=tf.float32)
+    # bbox_labels = tf.add(pos_labels, neg_labels)
     #
-    gt_boxes_map = tf.gather(gt_boxes, max_indices_each_gt_box, batch_dims=1)
+    gt_boxes_map = tf.gather(gt_boxes, max_indices_each_row, batch_dims=1)
     # Replace negative bboxes with zeros
     expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, -1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
     # Calculate delta values between anchors and ground truth bboxes

@@ -99,10 +99,10 @@ def get_hyper_params(**kwargs):
     """
     hyper_params = {
         "anchor_ratios": [0.5, 1, 2],
-        "anchor_scales": [16, 32, 64, 128, 256],
+        "anchor_scales": [128, 256, 512],
         "variances": [0.1, 0.1, 0.2, 0.2],
         "stride": 16,
-        "pre_nms_topn": 6000,
+        "pre_nms_topn": 2000,
         "post_nms_topn": 300,
         "nms_iou_threshold": 0.7,
         "total_pos_bboxes": 128,
