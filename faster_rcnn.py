@@ -90,6 +90,7 @@ class RoIDelta(Layer):
         gt_labels = inputs[2]
         total_labels = self.hyper_params["total_labels"]
         total_pos_bboxes = self.hyper_params["total_pos_bboxes"]
+        total_neg_bboxes = self.hyper_params["total_neg_bboxes"]
         variances = self.hyper_params["variances"]
         batch_size, total_bboxes = tf.shape(roi_bboxes)[0], tf.shape(roi_bboxes)[1]
         # Calculate iou values between each bboxes and ground truth boxes
@@ -98,18 +99,20 @@ class RoIDelta(Layer):
         max_indices_each_gt_box = tf.argmax(iou_map, axis=2, output_type=tf.int32)
         # IoU map has iou values for every gt boxes and we merge these values column wise
         merged_iou_map = tf.reduce_max(iou_map, axis=2)
-        # Sorted iou values
-        sorted_iou_map = tf.argsort(merged_iou_map, direction="DESCENDING")
-        # Sort indices for generating masks
-        sorted_map_indices = tf.argsort(sorted_iou_map)
-        # Generate pos mask for pos bboxes
-        pos_mask = tf.less(sorted_map_indices, total_pos_bboxes)
+        #
+        pos_mask = tf.greater(merged_iou_map, 0.5)
+        pos_mask = helpers.randomly_select_xyz_mask(pos_mask, tf.tile(tf.constant([total_pos_bboxes], dtype=tf.int32), (batch_size, )))
+        #
+        neg_mask = tf.logical_and(tf.less(merged_iou_map, 0.5), tf.greater(merged_iou_map, 0.1))
+        neg_mask = helpers.randomly_select_xyz_mask(neg_mask, tf.tile(tf.constant([total_neg_bboxes], dtype=tf.int32), (batch_size, )))
         #
         gt_boxes_map = tf.gather(gt_boxes, max_indices_each_gt_box, batch_dims=1)
         expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, axis=-1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
         #
         gt_labels_map = tf.gather(gt_labels, max_indices_each_gt_box, batch_dims=1)
-        expanded_gt_labels = tf.where(pos_mask, gt_labels_map, tf.zeros_like(gt_labels_map))
+        pos_gt_labels = tf.where(pos_mask, gt_labels_map, tf.constant(-1, dtype=tf.int32))
+        neg_gt_labels = tf.cast(neg_mask, dtype=tf.int32)
+        expanded_gt_labels = pos_gt_labels + neg_gt_labels
         #
         roi_bbox_deltas = helpers.get_deltas_from_bboxes(roi_bboxes, expanded_gt_boxes) / variances
         #

@@ -14,6 +14,23 @@ VOC = {
     "max_width": 500,
 }
 
+def randomly_select_xyz_mask(mask, select_xyz):
+    """Selecting x, y, z number of True elements for corresponding batch and replacing others to False
+    inputs:
+        mask = (batch_size, [m_bool_value])
+        select_xyz = ([x_y_z_number_for_corresponding_batch])
+            example = tf.constant([128, 50, 42], dtype=tf.int32)
+    outputs:
+        selected_valid_mask = (batch_size, [m_bool_value])
+    """
+    maxval = tf.reduce_max(select_xyz) * 10
+    random_mask = tf.random.uniform(tf.shape(mask), minval=1, maxval=maxval, dtype=tf.int32)
+    multiplied_mask = tf.cast(mask, tf.int32) * random_mask
+    sorted_mask = tf.argsort(multiplied_mask, direction="DESCENDING")
+    sorted_mask_indices = tf.argsort(sorted_mask)
+    selected_mask = tf.less(sorted_mask_indices, tf.expand_dims(select_xyz, 1))
+    return tf.logical_and(mask, selected_mask)
+
 def frcnn_cls_loss(*args):
     """Calculating faster rcnn class loss value.
     inputs:
