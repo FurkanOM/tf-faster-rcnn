@@ -91,26 +91,25 @@ def reg_loss(*args):
     total_pos_bboxes = tf.maximum(1.0, tf.reduce_sum(pos_mask))
     return loc_loss / total_pos_bboxes
 
-def get_model_path(model_type, stride):
+def get_model_path(model_type):
     """Generating model path from stride value for save/load model weights.
     inputs:
         model_type = "rpn" or "frcnn"
-        stride = 32 or 16
 
     outputs:
-        model_path = os model path, for example: "models/stride_32_rpn_model_weights.h5"
+        model_path = os model path, for example: "models/rpn_model_weights.h5"
     """
     main_path = "models"
     if not os.path.exists(main_path):
         os.makedirs(main_path)
-    model_path = os.path.join(main_path, "stride_{0}_{1}_model_weights.h5".format(stride, model_type))
+    model_path = os.path.join(main_path, "{}_model_weights.h5".format(model_type))
     return model_path
 
 def get_hyper_params(**kwargs):
     """Generating hyper params in a dynamic way.
     inputs:
         **kwargs = any value could be updated in the hyper_params
-            stride => should be 16 or 32
+
     outputs:
         hyper_params = dictionary
     """
@@ -259,7 +258,7 @@ def get_bboxes_from_deltas(anchors, deltas):
     y2 = all_bbox_height + y1
     x2 = all_bbox_width + x1
     #
-    return tf.stack([y1, x1, y2, x2], axis=2)
+    return tf.stack([y1, x1, y2, x2], axis=-1)
 
 def get_deltas_from_bboxes(bboxes, gt_boxes):
     """Calculating bounding box deltas for given bounding box and ground truth boxes.

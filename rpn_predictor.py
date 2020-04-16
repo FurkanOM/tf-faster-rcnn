@@ -1,7 +1,6 @@
 import tensorflow as tf
-from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
-from tensorflow.keras.models import load_model, Sequential
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.models import load_model
 import helpers
 import rpn
 import faster_rcnn
@@ -27,13 +26,10 @@ VOC_test_data = VOC_test_data.map(lambda x : helpers.preprocessing(x, max_height
 padded_shapes, padding_values = helpers.get_padded_batch_params()
 VOC_test_data = VOC_test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
-base_model = VGG16(include_top=False)
-if hyper_params["stride"] == 16:
-    base_model = Sequential(base_model.layers[:-1])
-rpn_model = rpn.get_model(base_model, hyper_params)
+rpn_model, _ = rpn.get_model(hyper_params)
 
-frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
-rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
+frcnn_model_path = helpers.get_model_path("frcnn")
+rpn_model_path = helpers.get_model_path("rpn")
 model_path = frcnn_model_path if load_weights_from_frcnn else rpn_model_path
 rpn_model.load_weights(model_path, by_name=True)
 

@@ -1,7 +1,5 @@
 import tensorflow as tf
 from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
 import helpers
 import rpn
 
@@ -34,29 +32,20 @@ VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_sh
 VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
 anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
-rpn_train_feed = rpn.generator(VOC_train_data, anchors, hyper_params, preprocess_input)
-rpn_val_feed = rpn.generator(VOC_val_data, anchors, hyper_params, preprocess_input)
+rpn_train_feed = rpn.generator(VOC_train_data, anchors, hyper_params)
+rpn_val_feed = rpn.generator(VOC_val_data, anchors, hyper_params)
 
-base_model = VGG16(include_top=False, weights="imagenet")
-if hyper_params["stride"] == 16:
-    base_model = Sequential(base_model.layers[:-1])
-
-rpn_model = rpn.get_model(base_model, hyper_params)
+rpn_model, _ = rpn.get_model(hyper_params)
 rpn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                   loss=[helpers.reg_loss, helpers.rpn_cls_loss])
 # Load weights
-rpn_model_path = helpers.get_model_path("rpn", hyper_params["stride"])
+rpn_model_path = helpers.get_model_path("rpn")
 
 if load_weights:
     rpn_model.load_weights(rpn_model_path)
 
 checkpoint_callback = ModelCheckpoint(rpn_model_path, monitor="val_loss", save_best_only=True, save_weights_only=True)
-"""
-for image_data in VOC_train_data:
-    input_img, actual_deltas, actual_labels = rpn.get_step_data(image_data, anchors, hyper_params, preprocess_input)
 
-    break
-"""
 rpn_model.fit(rpn_train_feed,
               steps_per_epoch=step_size_train,
               validation_data=rpn_val_feed,

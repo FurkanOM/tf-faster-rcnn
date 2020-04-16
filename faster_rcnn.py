@@ -1,4 +1,3 @@
-import os
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Lambda, Input, Conv2D, TimeDistributed, Dense, Flatten, BatchNormalization, Dropout
@@ -71,8 +70,8 @@ class RoIDelta(Layer):
         gt_labels = (batch_size, padded_gt_boxes_size)
 
     outputs:
-        roi_bbox_deltas = (batch_size, nms_topn, total_labels * [delta_y, delta_x, delta_h, delta_w])
-        roi_bbox_labels = (batch_size, nms_topn, total_labels)
+        roi_bbox_deltas = (batch_size, post_nms_topn * total_labels, [delta_y, delta_x, delta_h, delta_w])
+        roi_bbox_labels = (batch_size, post_nms_topn, total_labels)
     """
 
     def __init__(self, hyper_params, **kwargs):
@@ -128,10 +127,10 @@ class RoIPooling(Layer):
     Firstly cropping bounding boxes from the feature maps and then resizing it to the pooling size.
     inputs:
         feature_map = (batch_size, img_output_height, img_output_width, channels)
-        roi_bboxes = (batch_size, nms_topn, [y1, x1, y2, x2])
+        roi_bboxes = (batch_size, post_nms_topn, [y1, x1, y2, x2])
 
     outputs:
-        final_pooling_feature_map = (batch_size, nms_topn, pooling_size[0], pooling_size[1], channels)
+        final_pooling_feature_map = (batch_size, post_nms_topn, pooling_size[0], pooling_size[1], channels)
             pooling_size usually (7, 7)
     """
 
@@ -165,14 +164,13 @@ class RoIPooling(Layer):
         final_pooling_feature_map = tf.reshape(pooling_feature_map, (batch_size, total_bboxes, pooling_feature_map.shape[1], pooling_feature_map.shape[2], pooling_feature_map.shape[3]))
         return final_pooling_feature_map
 
-def generator(dataset, anchors, hyper_params, input_processor):
+def generator(dataset, anchors, hyper_params):
     """Tensorflow data generator for fit method, yielding inputs and outputs.
     inputs:
         dataset = tf.data.Dataset, PaddedBatchDataset
         anchors = (total_anchors, [y1, x1, y2, x2])
             these values in normalized format between [0, 1]
         hyper_params = dictionary
-        input_processor = function for preparing image for input. It's getting from backbone.
 
     outputs:
         yield inputs, outputs
@@ -180,7 +178,7 @@ def generator(dataset, anchors, hyper_params, input_processor):
     while True:
         for image_data in dataset:
             _, gt_boxes, gt_labels = image_data
-            input_img, bbox_deltas, bbox_labels = rpn.get_step_data(image_data, anchors, hyper_params, input_processor)
+            input_img, bbox_deltas, bbox_labels = rpn.get_step_data(image_data, anchors, hyper_params)
             yield (input_img, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
 
 def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):

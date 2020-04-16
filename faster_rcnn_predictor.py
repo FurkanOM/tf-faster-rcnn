@@ -1,7 +1,5 @@
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.applications.vgg16 import preprocess_input
 import helpers
 import rpn
 import faster_rcnn
@@ -26,14 +24,11 @@ VOC_test_data = VOC_test_data.map(lambda x : helpers.preprocessing(x, max_height
 padded_shapes, padding_values = helpers.get_padded_batch_params()
 VOC_test_data = VOC_test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
-base_model = VGG16(include_top=False)
-if hyper_params["stride"] == 16:
-    base_model = Sequential(base_model.layers[:-1])
-rpn_model = rpn.get_model(base_model, hyper_params)
+rpn_model, base_model = rpn.get_model(hyper_params)
 anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, anchors, hyper_params, mode=mode)
 #
-frcnn_model_path = helpers.get_model_path("frcnn", hyper_params["stride"])
+frcnn_model_path = helpers.get_model_path("frcnn")
 frcnn_model.load_weights(frcnn_model_path)
 
 background_label = "bg"
@@ -49,12 +44,15 @@ for image_data in VOC_test_data:
     roi_bboxes, rpn_reg_pred, rpn_cls_pred, frcnn_reg_pred, frcnn_cls_pred = frcnn_pred
     frcnn_reg_pred = tf.reshape(frcnn_reg_pred, (batch_size, tf.shape(frcnn_reg_pred)[1], total_labels, 4))
     frcnn_reg_pred *= hyper_params["variances"]
+    #
+    expanded_roi_bboxes = tf.tile(tf.expand_dims(roi_bboxes, -2), (1, 1, total_labels, 1))
+    frcnn_bboxes = helpers.get_bboxes_from_deltas(expanded_roi_bboxes, frcnn_reg_pred)
     # We remove background predictions and reshape outputs for non max suppression
     frcnn_cls_pred = tf.cast(frcnn_cls_pred, tf.float32)
     pred_labels_map = tf.argmax(frcnn_cls_pred, 2, output_type=tf.int32)
     valid_cond = tf.not_equal(pred_labels_map, bg_id)
     #
-    valid_bboxes = tf.expand_dims(frcnn_reg_pred[valid_cond], 0)
+    valid_bboxes = tf.expand_dims(frcnn_bboxes[valid_cond], 0)
     valid_labels = tf.expand_dims(frcnn_cls_pred[valid_cond], 0)
     #
     nms_bboxes, nmsed_scores, nmsed_classes, valid_detections = helpers.non_max_suppression(valid_bboxes, valid_labels,
