@@ -201,11 +201,9 @@ def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
     #
     output = TimeDistributed(Flatten(), name="frcnn_flatten")(roi_pooled)
     output = TimeDistributed(Dense(4096, activation="relu"), name="frcnn_fc1")(output)
-    output = TimeDistributed(BatchNormalization(), name="frcnn_batch_norm1")(output)
-    output = TimeDistributed(Dropout(0.2), name="frcnn_dropout1")(output)
-    output = TimeDistributed(Dense(2048, activation="relu"), name="frcnn_fc2")(output)
-    output = TimeDistributed(BatchNormalization(), name="frcnn_batch_norm2")(output)
-    output = TimeDistributed(Dropout(0.2), name="frcnn_dropout2")(output)
+    output = TimeDistributed(Dropout(0.5), name="frcnn_dropout1")(output)
+    output = TimeDistributed(Dense(4096, activation="relu"), name="frcnn_fc2")(output)
+    output = TimeDistributed(Dropout(0.5), name="frcnn_dropout2")(output)
     frcnn_cls_predictions = TimeDistributed(Dense(hyper_params["total_labels"], activation="softmax"), name="frcnn_cls")(output)
     frcnn_reg_predictions = TimeDistributed(Dense(hyper_params["total_labels"] * 4, activation="linear"), name="frcnn_reg")(output)
     #
