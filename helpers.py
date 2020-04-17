@@ -192,7 +192,7 @@ def get_labels(info):
     """
     return info.features["labels"].names
 
-def preprocessing(image_data, max_height, max_width):
+def preprocessing(image_data, max_height, max_width, apply_augmentation=False):
     """Image resizing operation handled before batch operations.
     inputs:
         image_data = tensorflow dataset image_data
@@ -205,10 +205,51 @@ def preprocessing(image_data, max_height, max_width):
         gt_labels = (gt_box_size)
     """
     img = image_data["image"]
-    img = resize_image(img, max_height, max_width)
     gt_boxes = image_data["objects"]["bbox"]
     gt_labels = tf.cast(image_data["objects"]["label"] + 1, tf.int32)
+    if apply_augmentation:
+        img, gt_boxes = randomly_apply_operation(flip_horizontally, img, gt_boxes)
+    img = resize_image(img, max_height, max_width)
     return img, gt_boxes, gt_labels
+
+def get_random_bool():
+    """Generating random boolean.
+    outputs:
+        random boolean 0d tensor
+    """
+    return tf.greater(tf.random.uniform((), dtype=tf.float32), 0.5)
+
+def randomly_apply_operation(operation, img, gt_boxes, *args):
+    """Randomly applying given method to image and ground truth boxes.
+    inputs:
+        operation = callable method
+        img = (height, width, depth)
+        gt_boxes = (ground_truth_object_count, [y1, x1, y2, x2])
+    outputs:
+        modified_or_not_img = (final_height, final_width, depth)
+        modified_or_not_gt_boxes = (ground_truth_object_count, [y1, x1, y2, x2])
+    """
+    return tf.cond(
+        get_random_bool(),
+        lambda: operation(img, gt_boxes, *args),
+        lambda: (img, gt_boxes, *args)
+    )
+
+def flip_horizontally(img, gt_boxes):
+    """Flip image horizontally and adjust the ground truth boxes.
+    inputs:
+        img = (height, width, depth)
+        gt_boxes = (ground_truth_object_count, [y1, x1, y2, x2])
+    outputs:
+        modified_img = (height, width, depth)
+        modified_gt_boxes = (ground_truth_object_count, [y1, x1, y2, x2])
+    """
+    flipped_img = tf.image.flip_left_right(img)
+    flipped_gt_boxes = tf.stack([gt_boxes[..., 0],
+                                1.0 - gt_boxes[..., 3],
+                                gt_boxes[..., 2],
+                                1.0 - gt_boxes[..., 1]], -1)
+    return flipped_img, flipped_gt_boxes
 
 def non_max_suppression(pred_bboxes, pred_labels, **kwargs):
     """Applying non maximum suppression.

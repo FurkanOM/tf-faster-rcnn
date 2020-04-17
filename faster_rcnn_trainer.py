@@ -25,7 +25,7 @@ hyper_params["total_labels"] = len(labels) + 1
 # If you want to use different dataset and don't know max height and width values
 # You can use calculate_max_height_width method in helpers
 max_height, max_width = helpers.VOC["max_height"], helpers.VOC["max_width"]
-VOC_train_data = VOC_train_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
+VOC_train_data = VOC_train_data.map(lambda x : helpers.preprocessing(x, max_height, max_width, apply_augmentation=True))
 VOC_val_data = VOC_val_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
 
 padded_shapes, padding_values = helpers.get_padded_batch_params()
