@@ -39,7 +39,7 @@ python faster_rcnn_trainer.py -handle-gpu
 
 ## Examples
 
-| Trained with VOC 2007 trainval data example results |
+| Trained with VOC 2007 trainval data |
 | -------------- |
 | ![Man riding bike](http://furkanomerustaoglu.com/wp-content/uploads/2020/04/man_riding_bike.png) |
 | Photo by William Peynichou on Unsplash |
