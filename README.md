@@ -37,11 +37,14 @@ If you have GPU issues you can use **-handle-gpu** flag with these commands:
 python faster_rcnn_trainer.py -handle-gpu
 ```
 
-## Faster-RCNN predictions
+## Examples
 
-![Faster-RCNN prediction result](http://furkanomerustaoglu.com/wp-content/uploads/2020/02/frcnn_pred_result.jpg)
-
-Photo by Joséphine Menge on Unsplash
+| Trained with VOC 2007 trainval data example results |
+| -------------- |
+| ![Man riding bike](http://furkanomerustaoglu.com/wp-content/uploads/2020/04/man_riding_bike.png) |
+| Photo by William Peynichou on Unsplash |
+| ![Airplanes](http://furkanomerustaoglu.com/wp-content/uploads/2020/04/airplanes.png) |
+| Photo by Vishu Gowda on Unsplash |
 
 ## Todo
 
