@@ -8,7 +8,7 @@ import rpn
 class RoIBBox(Layer):
     """Generating bounding boxes from rpn predictions.
     First calculating the boxes from predicted deltas and label probs.
-    Then applied non max suppression and selecting "post_nms_topn" boxes.
+    Then applied non max suppression and selecting "train or test nms_topn" boxes.
     inputs:
         rpn_bbox_deltas = (batch_size, img_output_height, img_output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
             img_output_height and img_output_width are calculated to the base model output
@@ -16,17 +16,18 @@ class RoIBBox(Layer):
         rpn_labels = (batch_size, img_output_height, img_output_width, anchor_count)
 
     outputs:
-        roi_bboxes = (batch_size, post_nms_topn, [y1, x1, y2, x2])
+        roi_bboxes = (batch_size, train/test_nms_topn, [y1, x1, y2, x2])
     """
 
-    def __init__(self, anchors, hyper_params, **kwargs):
+    def __init__(self, anchors, mode, hyper_params, **kwargs):
         super(RoIBBox, self).__init__(**kwargs)
         self.hyper_params = hyper_params
+        self.mode = mode
         self.anchors = tf.constant(anchors, dtype=tf.float32)
 
     def get_config(self):
         config = super(RoIBBox, self).get_config()
-        config.update({"hyper_params": self.hyper_params, "anchors": self.anchors})
+        config.update({"hyper_params": self.hyper_params, "anchors": self.anchors, "mode": self.mode})
         return config
 
     def call(self, inputs):
@@ -35,7 +36,7 @@ class RoIBBox(Layer):
         anchors = self.anchors
         #
         pre_nms_topn = self.hyper_params["pre_nms_topn"]
-        post_nms_topn = self.hyper_params["post_nms_topn"]
+        post_nms_topn = self.hyper_params["train_nms_topn"] if self.mode == "training" else self.hyper_params["test_nms_topn"]
         nms_iou_threshold = self.hyper_params["nms_iou_threshold"]
         variances = self.hyper_params["variances"]
         total_anchors = anchors.shape[0]
@@ -70,8 +71,8 @@ class RoIDelta(Layer):
         gt_labels = (batch_size, padded_gt_boxes_size)
 
     outputs:
-        roi_bbox_deltas = (batch_size, post_nms_topn * total_labels, [delta_y, delta_x, delta_h, delta_w])
-        roi_bbox_labels = (batch_size, post_nms_topn, total_labels)
+        roi_bbox_deltas = (batch_size, train_nms_topn * total_labels, [delta_y, delta_x, delta_h, delta_w])
+        roi_bbox_labels = (batch_size, train_nms_topn, total_labels)
     """
 
     def __init__(self, hyper_params, **kwargs):
@@ -100,10 +101,10 @@ class RoIDelta(Layer):
         merged_iou_map = tf.reduce_max(iou_map, axis=2)
         #
         pos_mask = tf.greater(merged_iou_map, 0.5)
-        pos_mask = helpers.randomly_select_xyz_mask(pos_mask, tf.tile(tf.constant([total_pos_bboxes], dtype=tf.int32), (batch_size, )))
+        pos_mask = helpers.randomly_select_xyz_mask(pos_mask, tf.constant([total_pos_bboxes], dtype=tf.int32))
         #
         neg_mask = tf.logical_and(tf.less(merged_iou_map, 0.5), tf.greater(merged_iou_map, 0.1))
-        neg_mask = helpers.randomly_select_xyz_mask(neg_mask, tf.tile(tf.constant([total_neg_bboxes], dtype=tf.int32), (batch_size, )))
+        neg_mask = helpers.randomly_select_xyz_mask(neg_mask, tf.constant([total_neg_bboxes], dtype=tf.int32))
         #
         gt_boxes_map = tf.gather(gt_boxes, max_indices_each_gt_box, batch_dims=1)
         expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, axis=-1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
@@ -127,10 +128,10 @@ class RoIPooling(Layer):
     Firstly cropping bounding boxes from the feature maps and then resizing it to the pooling size.
     inputs:
         feature_map = (batch_size, img_output_height, img_output_width, channels)
-        roi_bboxes = (batch_size, post_nms_topn, [y1, x1, y2, x2])
+        roi_bboxes = (batch_size, train/test_nms_topn, [y1, x1, y2, x2])
 
     outputs:
-        final_pooling_feature_map = (batch_size, post_nms_topn, pooling_size[0], pooling_size[1], channels)
+        final_pooling_feature_map = (batch_size, train/test_nms_topn, pooling_size[0], pooling_size[1], channels)
             pooling_size usually (7, 7)
     """
 
@@ -195,7 +196,7 @@ def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
     input_img = base_model.input
     rpn_reg_predictions, rpn_cls_predictions = rpn_model.output
     #
-    roi_bboxes = RoIBBox(anchors, hyper_params, name="roi_bboxes")([rpn_reg_predictions, rpn_cls_predictions])
+    roi_bboxes = RoIBBox(anchors, mode, hyper_params, name="roi_bboxes")([rpn_reg_predictions, rpn_cls_predictions])
     #
     roi_pooled = RoIPooling(hyper_params, name="roi_pooling")([base_model.output, roi_bboxes])
     #
@@ -222,11 +223,11 @@ def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
         frcnn_cls_loss_layer = Lambda(helpers.frcnn_cls_loss, name=loss_names[3])([frcnn_cls_actuals, frcnn_cls_predictions])
         #
         frcnn_model = Model(inputs=[input_img, input_gt_boxes, input_gt_labels,
-                              rpn_reg_actuals, rpn_cls_actuals],
-                      outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
-                               frcnn_reg_predictions, frcnn_cls_predictions,
-                               rpn_reg_loss_layer, rpn_cls_loss_layer,
-                               frcnn_reg_loss_layer, frcnn_cls_loss_layer])
+                                    rpn_reg_actuals, rpn_cls_actuals],
+                            outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
+                                     frcnn_reg_predictions, frcnn_cls_predictions,
+                                     rpn_reg_loss_layer, rpn_cls_loss_layer,
+                                     frcnn_reg_loss_layer, frcnn_cls_loss_layer])
         #
         for layer_name in loss_names:
             layer = frcnn_model.get_layer(layer_name)
@@ -234,9 +235,8 @@ def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
             frcnn_model.add_metric(layer.output, name=layer_name, aggregation="mean")
         #
     else:
-        frcnn_model = Model(inputs=[input_img],
-                      outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
-                               frcnn_reg_predictions, frcnn_cls_predictions])
+        frcnn_model = Model(inputs=input_img, outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
+                                                       frcnn_reg_predictions, frcnn_cls_predictions])
         #
     return frcnn_model
 

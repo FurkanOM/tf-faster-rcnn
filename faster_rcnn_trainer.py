@@ -8,7 +8,7 @@ args = helpers.handle_args()
 if args.handle_gpu:
     helpers.handle_gpu_compatibility()
 
-batch_size = 8
+batch_size = 4
 epochs = 50
 load_weights = False
 hyper_params = helpers.get_hyper_params()

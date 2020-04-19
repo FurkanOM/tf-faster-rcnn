@@ -130,7 +130,7 @@ def get_step_data(image_data, anchors, hyper_params):
     scatter_bbox_indices = tf.stack([valid_indices[..., 0], valid_max_indices], 1)
     max_pos_mask = tf.scatter_nd(scatter_bbox_indices, tf.fill((tf.shape(valid_indices)[0], ), True), tf.shape(pos_mask))
     pos_mask = tf.logical_or(pos_mask, max_pos_mask)
-    pos_mask = helpers.randomly_select_xyz_mask(pos_mask, tf.tile(tf.constant([total_pos_bboxes], dtype=tf.int32), (batch_size, )))
+    pos_mask = helpers.randomly_select_xyz_mask(pos_mask, tf.constant([total_pos_bboxes], dtype=tf.int32))
     #
     pos_count = tf.reduce_sum(tf.cast(pos_mask, tf.int32), axis=-1)
     neg_count = (total_pos_bboxes + total_neg_bboxes) - pos_count

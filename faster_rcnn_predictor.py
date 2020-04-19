@@ -10,6 +10,8 @@ if args.handle_gpu:
 
 mode = "inference"
 batch_size = 1
+use_custom_images = False
+custom_image_path = "data/images/"
 hyper_params = helpers.get_hyper_params()
 
 VOC_test_data, VOC_info = helpers.get_dataset("voc/2007", "test")
@@ -19,10 +21,13 @@ hyper_params["total_labels"] = len(labels) + 1
 # If you want to use different dataset and don't know max height and width values
 # You can use calculate_max_height_width method in helpers
 max_height, max_width = helpers.VOC["max_height"], helpers.VOC["max_width"]
-VOC_test_data = VOC_test_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
 
-padded_shapes, padding_values = helpers.get_padded_batch_params()
-VOC_test_data = VOC_test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+if use_custom_images:
+    VOC_test_data = helpers.get_image_data_from_folder(custom_image_path, max_height, max_width)
+else:
+    VOC_test_data = VOC_test_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
+    padded_shapes, padding_values = helpers.get_padded_batch_params()
+    VOC_test_data = VOC_test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
 rpn_model, base_model = rpn.get_model(hyper_params)
 anchors = rpn.generate_anchors(max_height, max_width, hyper_params)

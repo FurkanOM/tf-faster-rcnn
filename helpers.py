@@ -118,8 +118,9 @@ def get_hyper_params(**kwargs):
         "anchor_scales": [128, 256, 512],
         "variances": [0.1, 0.1, 0.2, 0.2],
         "stride": 16,
-        "pre_nms_topn": 2000,
-        "post_nms_topn": 300,
+        "pre_nms_topn": 6000,
+        "train_nms_topn": 1500,
+        "test_nms_topn": 300,
         "nms_iou_threshold": 0.7,
         "total_pos_bboxes": 128,
         "total_neg_bboxes": 128,
@@ -191,6 +192,31 @@ def get_labels(info):
         labels = [labels list]
     """
     return info.features["labels"].names
+
+def get_image_data_from_folder(custom_image_path, final_height, final_width):
+    """Generating image data like tensorflow dataset format for a given image path.
+    This method could be used for custom image predictions.
+    inputs:
+        custom_image_path = folder of the custom images
+        final_height = final image height after resizing
+        final_width = final image width after resizing
+
+    outputs:
+        image_data = (img, dummy_gt_boxes, dummy_gt_labels)
+            img = (1, final_height, final_width, depth)
+            dummy_gt_boxes = None
+            dummy_gt_labels = None
+    """
+    image_data = []
+    for path, dir, filenames in os.walk(custom_image_path):
+        for filename in filenames:
+            img_path = os.path.join(path, filename)
+            image = Image.open(img_path)
+            resized_image = image.resize((final_width, final_height), Image.LANCZOS)
+            img = tf.expand_dims(array_from_img(resized_image), 0)
+            image_data.append((img, None, None))
+        break
+    return image_data
 
 def preprocessing(image_data, max_height, max_width, apply_augmentation=False):
     """Image resizing operation handled before batch operations.
