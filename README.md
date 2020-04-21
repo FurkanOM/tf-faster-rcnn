@@ -56,6 +56,7 @@ python faster_rcnn_trainer.py -handle-gpu
 
 ### References
 
+* [VOC 2007 Dataset](http://www.pascal-network.org/challenges/VOC/voc2007/workshop/index.html)
 * [Mask RCNN](https://github.com/matterport/Mask_RCNN) - especially for the construction of the model
 * [keras-frcnn](https://github.com/small-yellow-duck/keras-frcnn)
 * [PyTorch Faster RCNN](https://github.com/rbgirshick/py-faster-rcnn)
