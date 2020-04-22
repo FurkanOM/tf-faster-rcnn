@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow.keras.applications.vgg16 import preprocess_input
 import helpers
 import rpn
 import faster_rcnn
@@ -43,9 +42,7 @@ total_labels = hyper_params["total_labels"]
 
 for image_data in VOC_test_data:
     img, _, _ = image_data
-    input_img = preprocess_input(img)
-    input_img = tf.image.convert_image_dtype(input_img, tf.float32)
-    frcnn_pred = frcnn_model.predict_on_batch(input_img)
+    frcnn_pred = frcnn_model.predict_on_batch(img)
     roi_bboxes, rpn_reg_pred, rpn_cls_pred, frcnn_reg_pred, frcnn_cls_pred = frcnn_pred
     frcnn_reg_pred = tf.reshape(frcnn_reg_pred, (batch_size, tf.shape(frcnn_reg_pred)[1], total_labels, 4))
     frcnn_reg_pred *= hyper_params["variances"]

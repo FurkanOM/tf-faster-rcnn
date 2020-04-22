@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow.keras.applications.vgg16 import preprocess_input
 from tensorflow.keras.models import load_model
 import helpers
 import rpn
@@ -37,9 +36,7 @@ anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
 
 for image_data in VOC_test_data:
     img, _, _ = image_data
-    input_img = preprocess_input(img)
-    input_img = tf.image.convert_image_dtype(input_img, tf.float32)
-    rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(input_img)
+    rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(img)
     #
     total_anchors = anchors.shape[0]
     rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
@@ -52,4 +49,4 @@ for image_data in VOC_test_data:
     nms_bboxes, _, _, _ = helpers.non_max_suppression(rpn_bboxes, rpn_labels,
                                                 max_output_size_per_class=hyper_params["test_nms_topn"],
                                                 max_total_size=hyper_params["test_nms_topn"])
-    helpers.draw_bboxes(input_img, nms_bboxes)
+    helpers.draw_bboxes(img, nms_bboxes)

@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
+from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.models import Model, Sequential
 import numpy as np
@@ -103,8 +103,6 @@ def get_step_data(image_data, anchors, hyper_params):
     """
     img, gt_boxes, gt_labels = image_data
     batch_size, image_height, image_width = tf.shape(img)[0], tf.shape(img)[1], tf.shape(img)[2]
-    input_img = preprocess_input(img)
-    input_img = tf.image.convert_image_dtype(input_img, tf.float32)
     stride = hyper_params["stride"]
     anchor_count = hyper_params["anchor_count"]
     total_pos_bboxes = hyper_params["total_pos_bboxes"]
@@ -151,7 +149,7 @@ def get_step_data(image_data, anchors, hyper_params):
     # bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
     bbox_labels = tf.reshape(bbox_labels, (batch_size, output_height, output_width, anchor_count))
     #
-    return input_img, bbox_deltas, bbox_labels
+    return img, bbox_deltas, bbox_labels
 
 def get_model(hyper_params):
     """Generating rpn model for given hyper params.
