@@ -1,9 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Lambda, Input, Conv2D, TimeDistributed, Dense, Flatten, BatchNormalization, Dropout
-import numpy as np
-import helpers
-import rpn
+from utils import bbox_utils, train_utils
 
 class RoIBBox(Layer):
     """Generating bounding boxes from rpn predictions.
@@ -45,7 +43,7 @@ class RoIBBox(Layer):
         rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors))
         #
         rpn_bbox_deltas *= variances
-        rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
+        rpn_bboxes = bbox_utils.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
         #
         _, pre_indices = tf.nn.top_k(rpn_labels, pre_nms_topn)
         #
@@ -55,7 +53,7 @@ class RoIBBox(Layer):
         pre_roi_bboxes = tf.reshape(pre_roi_bboxes, (batch_size, pre_nms_topn, 1, 4))
         pre_roi_labels = tf.reshape(pre_roi_labels, (batch_size, pre_nms_topn, 1))
         #
-        roi_bboxes, _, _, _ = helpers.non_max_suppression(pre_roi_bboxes, pre_roi_labels,
+        roi_bboxes, _, _, _ = bbox_utils.non_max_suppression(pre_roi_bboxes, pre_roi_labels,
                                                           max_output_size_per_class=post_nms_topn,
                                                           max_total_size=post_nms_topn,
                                                           iou_threshold=nms_iou_threshold)
@@ -94,17 +92,17 @@ class RoIDelta(Layer):
         variances = self.hyper_params["variances"]
         batch_size, total_bboxes = tf.shape(roi_bboxes)[0], tf.shape(roi_bboxes)[1]
         # Calculate iou values between each bboxes and ground truth boxes
-        iou_map = helpers.generate_iou_map(roi_bboxes, gt_boxes)
+        iou_map = bbox_utils.generate_iou_map(roi_bboxes, gt_boxes)
         # Get max index value for each row
         max_indices_each_gt_box = tf.argmax(iou_map, axis=2, output_type=tf.int32)
         # IoU map has iou values for every gt boxes and we merge these values column wise
         merged_iou_map = tf.reduce_max(iou_map, axis=2)
         #
         pos_mask = tf.greater(merged_iou_map, 0.5)
-        pos_mask = helpers.randomly_select_xyz_mask(pos_mask, tf.constant([total_pos_bboxes], dtype=tf.int32))
+        pos_mask = train_utils.randomly_select_xyz_mask(pos_mask, tf.constant([total_pos_bboxes], dtype=tf.int32))
         #
         neg_mask = tf.logical_and(tf.less(merged_iou_map, 0.5), tf.greater(merged_iou_map, 0.1))
-        neg_mask = helpers.randomly_select_xyz_mask(neg_mask, tf.constant([total_neg_bboxes], dtype=tf.int32))
+        neg_mask = train_utils.randomly_select_xyz_mask(neg_mask, tf.constant([total_neg_bboxes], dtype=tf.int32))
         #
         gt_boxes_map = tf.gather(gt_boxes, max_indices_each_gt_box, batch_dims=1)
         expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, axis=-1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
@@ -114,7 +112,7 @@ class RoIDelta(Layer):
         neg_gt_labels = tf.cast(neg_mask, dtype=tf.int32)
         expanded_gt_labels = pos_gt_labels + neg_gt_labels
         #
-        roi_bbox_deltas = helpers.get_deltas_from_bboxes(roi_bboxes, expanded_gt_boxes) / variances
+        roi_bbox_deltas = bbox_utils.get_deltas_from_bboxes(roi_bboxes, expanded_gt_boxes) / variances
         #
         roi_bbox_labels = tf.one_hot(expanded_gt_labels, total_labels)
         scatter_indices = tf.tile(tf.expand_dims(roi_bbox_labels, -1), (1, 1, 1, 4))
@@ -165,28 +163,13 @@ class RoIPooling(Layer):
         final_pooling_feature_map = tf.reshape(pooling_feature_map, (batch_size, total_bboxes, pooling_feature_map.shape[1], pooling_feature_map.shape[2], pooling_feature_map.shape[3]))
         return final_pooling_feature_map
 
-def generator(dataset, anchors, hyper_params):
-    """Tensorflow data generator for fit method, yielding inputs and outputs.
-    inputs:
-        dataset = tf.data.Dataset, PaddedBatchDataset
-        anchors = (total_anchors, [y1, x1, y2, x2])
-            these values in normalized format between [0, 1]
-        hyper_params = dictionary
-
-    outputs:
-        yield inputs, outputs
-    """
-    while True:
-        for image_data in dataset:
-            _, gt_boxes, gt_labels = image_data
-            input_img, bbox_deltas, bbox_labels = rpn.get_step_data(image_data, anchors, hyper_params)
-            yield (input_img, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
-
 def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
     """Generating rpn model for given backbone base model and hyper params.
     inputs:
-        base_model = tf.keras.model pretrained backbone, only VGG16 available for now
+        base_model = tf.keras.model pretrained backbone
         rpn_model = tf.keras.model generated rpn model
+        anchors = (total_anchors, [y1, x1, y2, x2])
+            these values in normalized format between [0, 1]
         hyper_params = dictionary
         mode = "training" or "inference"
 
@@ -217,10 +200,10 @@ def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
                                                         [roi_bboxes, input_gt_boxes, input_gt_labels])
         #
         loss_names = ["rpn_reg_loss", "rpn_cls_loss", "frcnn_reg_loss", "frcnn_cls_loss"]
-        rpn_reg_loss_layer = Lambda(helpers.reg_loss, name=loss_names[0])([rpn_reg_actuals, rpn_reg_predictions])
-        rpn_cls_loss_layer = Lambda(helpers.rpn_cls_loss, name=loss_names[1])([rpn_cls_actuals, rpn_cls_predictions])
-        frcnn_reg_loss_layer = Lambda(helpers.reg_loss, name=loss_names[2])([frcnn_reg_actuals, frcnn_reg_predictions])
-        frcnn_cls_loss_layer = Lambda(helpers.frcnn_cls_loss, name=loss_names[3])([frcnn_cls_actuals, frcnn_cls_predictions])
+        rpn_reg_loss_layer = Lambda(train_utils.reg_loss, name=loss_names[0])([rpn_reg_actuals, rpn_reg_predictions])
+        rpn_cls_loss_layer = Lambda(train_utils.rpn_cls_loss, name=loss_names[1])([rpn_cls_actuals, rpn_cls_predictions])
+        frcnn_reg_loss_layer = Lambda(train_utils.reg_loss, name=loss_names[2])([frcnn_reg_actuals, frcnn_reg_predictions])
+        frcnn_cls_loss_layer = Lambda(train_utils.frcnn_cls_loss, name=loss_names[3])([frcnn_cls_actuals, frcnn_cls_predictions])
         #
         frcnn_model = Model(inputs=[input_img, input_gt_boxes, input_gt_labels,
                                     rpn_reg_actuals, rpn_cls_actuals],
@@ -247,7 +230,7 @@ def init_model(model, hyper_params):
         model = tf.keras.model
         hyper_params = dictionary
     """
-    final_height, final_width = helpers.VOC["max_height"], helpers.VOC["max_width"]
+    final_height, final_width = hyper_params["img_size"], hyper_params["img_size"]
     img = tf.random.uniform((1, final_height, final_width, 3))
     output_height, output_width = final_height // hyper_params["stride"], final_width // hyper_params["stride"]
     total_anchors = output_height * output_width * hyper_params["anchor_count"]

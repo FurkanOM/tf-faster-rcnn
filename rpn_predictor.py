@@ -1,40 +1,37 @@
 import tensorflow as tf
-from tensorflow.keras.models import load_model
-import helpers
-import rpn
-import faster_rcnn
+from utils import io_utils, data_utils, train_utils, bbox_utils, drawing_utils
+from models.rpn_vgg16 import get_model
 
-args = helpers.handle_args()
+args = io_utils.handle_args()
 if args.handle_gpu:
-    helpers.handle_gpu_compatibility()
+    io_utils.handle_gpu_compatibility()
 
 batch_size = 1
 # If you have trained faster rcnn model you can load weights from faster rcnn model
 load_weights_from_frcnn = False
-hyper_params = helpers.get_hyper_params()
+hyper_params = train_utils.get_hyper_params()
 
-VOC_test_data, VOC_info = helpers.get_dataset("voc/2007", "test")
-labels = helpers.get_labels(VOC_info)
+test_data, dataset_info = data_utils.get_dataset("voc/2007", "test")
+labels = data_utils.get_labels(dataset_info)
 # We add 1 class for background
 hyper_params["total_labels"] = len(labels) + 1
-# If you want to use different dataset and don't know max height and width values
-# You can use calculate_max_height_width method in helpers
-max_height, max_width = helpers.VOC["max_height"], helpers.VOC["max_width"]
-VOC_test_data = VOC_test_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
+#
+img_size = hyper_params["img_size"]
+test_data = test_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size))
 
-padded_shapes, padding_values = helpers.get_padded_batch_params()
-VOC_test_data = VOC_test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+padded_shapes, padding_values = data_utils.get_padded_batch_params()
+test_data = test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
-rpn_model, _ = rpn.get_model(hyper_params)
+rpn_model, _ = get_model(hyper_params)
 
-frcnn_model_path = helpers.get_model_path("frcnn")
-rpn_model_path = helpers.get_model_path("rpn")
+frcnn_model_path = io_utils.get_model_path("faster_rcnn")
+rpn_model_path = io_utils.get_model_path("rpn")
 model_path = frcnn_model_path if load_weights_from_frcnn else rpn_model_path
 rpn_model.load_weights(model_path, by_name=True)
 
-anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
+anchors = bbox_utils.generate_anchors(hyper_params)
 
-for image_data in VOC_test_data:
+for image_data in test_data:
     img, _, _ = image_data
     rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(img)
     #
@@ -43,10 +40,10 @@ for image_data in VOC_test_data:
     rpn_bbox_deltas *= hyper_params["variances"]
     rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors, 1))
     #
-    rpn_bboxes = helpers.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
+    rpn_bboxes = bbox_utils.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
     rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, total_anchors, 1, 4))
     #
-    nms_bboxes, _, _, _ = helpers.non_max_suppression(rpn_bboxes, rpn_labels,
-                                                max_output_size_per_class=hyper_params["test_nms_topn"],
-                                                max_total_size=hyper_params["test_nms_topn"])
-    helpers.draw_bboxes(img, nms_bboxes)
+    nms_bboxes, _, _, _ = bbox_utils.non_max_suppression(rpn_bboxes, rpn_labels,
+                                                         max_output_size_per_class=hyper_params["test_nms_topn"],
+                                                         max_total_size=hyper_params["test_nms_topn"])
+    drawing_utils.draw_bboxes(img, nms_bboxes)

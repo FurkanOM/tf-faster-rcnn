@@ -1,51 +1,50 @@
 import tensorflow as tf
 from tensorflow.keras.callbacks import ModelCheckpoint
-import helpers
-import rpn
+from utils import io_utils, data_utils, train_utils, bbox_utils
+from models.rpn_vgg16 import get_model
 
-args = helpers.handle_args()
+args = io_utils.handle_args()
 if args.handle_gpu:
-    helpers.handle_gpu_compatibility()
+    io_utils.handle_gpu_compatibility()
 
 batch_size = 8
 epochs = 50
 load_weights = False
-hyper_params = helpers.get_hyper_params()
+hyper_params = train_utils.get_hyper_params()
 
-VOC_train_data, VOC_info = helpers.get_dataset("voc/2007", "train+validation")
-VOC_val_data, _ = helpers.get_dataset("voc/2007", "test")
-VOC_train_total_items = helpers.get_total_item_size(VOC_info, "train+validation")
-VOC_val_total_items = helpers.get_total_item_size(VOC_info, "test")
-step_size_train = helpers.get_step_size(VOC_train_total_items, batch_size)
-step_size_val = helpers.get_step_size(VOC_val_total_items, batch_size)
-labels = helpers.get_labels(VOC_info)
+train_data, dataset_info = data_utils.get_dataset("voc/2007", "train+validation")
+val_data, _ = data_utils.get_dataset("voc/2007", "test")
+train_total_items = data_utils.get_total_item_size(dataset_info, "train+validation")
+val_total_items = data_utils.get_total_item_size(dataset_info, "test")
+labels = data_utils.get_labels(dataset_info)
 # We add 1 class for background
 hyper_params["total_labels"] = len(labels) + 1
-# If you want to use different dataset and don't know max height and width values
-# You can use calculate_max_height_width method in helpers
-max_height, max_width = helpers.VOC["max_height"], helpers.VOC["max_width"]
-VOC_train_data = VOC_train_data.map(lambda x : helpers.preprocessing(x, max_height, max_width, apply_augmentation=True))
-VOC_val_data = VOC_val_data.map(lambda x : helpers.preprocessing(x, max_height, max_width))
+#
+img_size = hyper_params["img_size"]
+train_data = train_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size, apply_augmentation=True))
+val_data = val_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size))
 
-padded_shapes, padding_values = helpers.get_padded_batch_params()
-VOC_train_data = VOC_train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
-VOC_val_data = VOC_val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+padded_shapes, padding_values = data_utils.get_padded_batch_params()
+train_data = train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+val_data = val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 
-anchors = rpn.generate_anchors(max_height, max_width, hyper_params)
-rpn_train_feed = rpn.generator(VOC_train_data, anchors, hyper_params)
-rpn_val_feed = rpn.generator(VOC_val_data, anchors, hyper_params)
+anchors = bbox_utils.generate_anchors(hyper_params)
+rpn_train_feed = train_utils.rpn_generator(train_data, anchors, hyper_params)
+rpn_val_feed = train_utils.rpn_generator(val_data, anchors, hyper_params)
 
-rpn_model, _ = rpn.get_model(hyper_params)
+rpn_model, _ = get_model(hyper_params)
 rpn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
-                  loss=[helpers.reg_loss, helpers.rpn_cls_loss])
+                  loss=[train_utils.reg_loss, train_utils.rpn_cls_loss])
 # Load weights
-rpn_model_path = helpers.get_model_path("rpn")
+rpn_model_path = io_utils.get_model_path("rpn")
 
 if load_weights:
     rpn_model.load_weights(rpn_model_path)
 
 checkpoint_callback = ModelCheckpoint(rpn_model_path, monitor="val_loss", save_best_only=True, save_weights_only=True)
 
+step_size_train = train_utils.get_step_size(train_total_items, batch_size)
+step_size_val = train_utils.get_step_size(val_total_items, batch_size)
 rpn_model.fit(rpn_train_feed,
               steps_per_epoch=step_size_train,
               validation_data=rpn_val_feed,
