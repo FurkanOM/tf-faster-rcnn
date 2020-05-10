@@ -1,7 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.callbacks import ModelCheckpoint
 from utils import io_utils, data_utils, train_utils, bbox_utils
-from models.rpn_vgg16 import get_model
 
 args = io_utils.handle_args()
 if args.handle_gpu:
@@ -10,7 +9,13 @@ if args.handle_gpu:
 batch_size = 8
 epochs = 50
 load_weights = False
-hyper_params = train_utils.get_hyper_params()
+backbone = args.backbone
+io_utils.is_valid_backbone(backbone)
+
+if backbone == "vgg16":
+    from models.rpn_vgg16 import get_model
+
+hyper_params = train_utils.get_hyper_params(backbone)
 
 train_data, dataset_info = data_utils.get_dataset("voc/2007", "train+validation")
 val_data, _ = data_utils.get_dataset("voc/2007", "test")

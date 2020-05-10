@@ -9,8 +9,7 @@ class RoIBBox(Layer):
     Then applied non max suppression and selecting "train or test nms_topn" boxes.
     inputs:
         rpn_bbox_deltas = (batch_size, img_output_height, img_output_width, anchor_count * [delta_y, delta_x, delta_h, delta_w])
-            img_output_height and img_output_width are calculated to the base model output
-            they are (img_height // stride) and (img_width // stride) for VGG16 backbone
+            img_output_height and img_output_width are calculated to the base model feature map
         rpn_labels = (batch_size, img_output_height, img_output_width, anchor_count)
 
     outputs:
@@ -232,10 +231,10 @@ def init_model(model, hyper_params):
     """
     final_height, final_width = hyper_params["img_size"], hyper_params["img_size"]
     img = tf.random.uniform((1, final_height, final_width, 3))
-    output_height, output_width = final_height // hyper_params["stride"], final_width // hyper_params["stride"]
-    total_anchors = output_height * output_width * hyper_params["anchor_count"]
+    feature_map_shape = hyper_params["feature_map_shape"]
+    total_anchors = feature_map_shape * feature_map_shape * hyper_params["anchor_count"]
     gt_boxes = tf.random.uniform((1, 1, 4))
     gt_labels = tf.random.uniform((1, 1), maxval=hyper_params["total_labels"], dtype=tf.int32)
     bbox_deltas = tf.random.uniform((1, total_anchors, 4))
-    bbox_labels = tf.random.uniform((1, output_height, output_width, hyper_params["anchor_count"]), maxval=1, dtype=tf.float32)
+    bbox_labels = tf.random.uniform((1, feature_map_shape, feature_map_shape, hyper_params["anchor_count"]), maxval=1, dtype=tf.float32)
     model([img, gt_boxes, gt_labels, bbox_deltas, bbox_labels])

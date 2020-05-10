@@ -51,8 +51,7 @@ python faster_rcnn_trainer.py -handle-gpu
 * [x] Batch support
 * [x] Predictors and test results
 * [x] Inline documentation
-* [ ] Hyperparam management using command line
-* [ ] Multiple backbone support ([ResNet](https://www.tensorflow.org/api_docs/python/tf/keras/applications/ResNet101), [MobileNet](https://www.tensorflow.org/api_docs/python/tf/keras/applications/MobileNet), etc.)
+* [ ] MobileNetV2 backbone support ([MobileNetV2](https://www.tensorflow.org/api_docs/python/tf/keras/applications/MobileNetV2))
 
 ### References
 

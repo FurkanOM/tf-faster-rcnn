@@ -1,6 +1,6 @@
 import tensorflow as tf
 from utils import io_utils, data_utils, train_utils, bbox_utils, drawing_utils
-from models import faster_rcnn, rpn_vgg16
+from models import faster_rcnn
 
 args = io_utils.handle_args()
 if args.handle_gpu:
@@ -10,7 +10,13 @@ mode = "inference"
 batch_size = 1
 use_custom_images = False
 custom_image_path = "data/images/"
-hyper_params = train_utils.get_hyper_params()
+backbone = args.backbone
+io_utils.is_valid_backbone(backbone)
+
+if backbone == "vgg16":
+    from models.rpn_vgg16 import get_model as get_rpn_model
+
+hyper_params = train_utils.get_hyper_params(backbone)
 
 test_data, dataset_info = data_utils.get_dataset("voc/2007", "test")
 labels = data_utils.get_labels(dataset_info)
@@ -27,7 +33,7 @@ else:
     test_data = test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 #
 anchors = bbox_utils.generate_anchors(hyper_params)
-rpn_model, base_model = rpn_vgg16.get_model(hyper_params)
+rpn_model, base_model = get_rpn_model(hyper_params)
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, anchors, hyper_params, mode=mode)
 #
 frcnn_model_path = io_utils.get_model_path("faster_rcnn")

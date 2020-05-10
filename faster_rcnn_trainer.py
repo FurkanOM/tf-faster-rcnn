@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.callbacks import ModelCheckpoint
 from utils import io_utils, data_utils, train_utils, bbox_utils
-from models import faster_rcnn, rpn_vgg16
+from models import faster_rcnn
 
 args = io_utils.handle_args()
 if args.handle_gpu:
@@ -10,7 +10,13 @@ if args.handle_gpu:
 batch_size = 4
 epochs = 50
 load_weights = False
-hyper_params = train_utils.get_hyper_params()
+backbone = args.backbone
+io_utils.is_valid_backbone(backbone)
+
+if backbone == "vgg16":
+    from models.rpn_vgg16 import get_model as get_rpn_model
+
+hyper_params = train_utils.get_hyper_params(backbone)
 
 train_data, dataset_info = data_utils.get_dataset("voc/2007", "train+validation")
 val_data, _ = data_utils.get_dataset("voc/2007", "test")
@@ -32,7 +38,7 @@ anchors = bbox_utils.generate_anchors(hyper_params)
 frcnn_train_feed = train_utils.faster_rcnn_generator(train_data, anchors, hyper_params)
 frcnn_val_feed = train_utils.faster_rcnn_generator(val_data, anchors, hyper_params)
 #
-rpn_model, base_model = rpn_vgg16.get_model(hyper_params)
+rpn_model, base_model = get_rpn_model(hyper_params)
 frcnn_model = faster_rcnn.get_model(base_model, rpn_model, anchors, hyper_params)
 frcnn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                     loss=[None] * len(frcnn_model.output))

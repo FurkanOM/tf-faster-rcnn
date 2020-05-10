@@ -1,31 +1,24 @@
 import tensorflow as tf
-import numpy as np
 
 def generate_base_anchors(hyper_params):
-    """Generating top left anchors for given anchor_ratios, anchor_scales and stride values.
+    """Generating top left anchors for given anchor_ratios, anchor_scales and image size values.
     inputs:
         hyper_params = dictionary
 
     outputs:
         base_anchors = (anchor_count, [y1, x1, y2, x2])
-            these values not normalized yet
     """
-    stride = hyper_params["stride"]
+    img_size = hyper_params["img_size"]
     anchor_ratios = hyper_params["anchor_ratios"]
     anchor_scales = hyper_params["anchor_scales"]
-    center = stride // 2
     base_anchors = []
     for scale in anchor_scales:
+        scale /= img_size
         for ratio in anchor_ratios:
-            box_area = scale ** 2
-            w = round((box_area / ratio) ** 0.5)
-            h = round(w * ratio)
-            x_min = center - w / 2
-            y_min = center - h / 2
-            x_max = center + w / 2
-            y_max = center + h / 2
-            base_anchors.append([y_min, x_min, y_max, x_max])
-    return np.array(base_anchors, dtype=np.float32)
+            w = tf.sqrt(scale ** 2 / ratio)
+            h = w * ratio
+            base_anchors.append([-h / 2, -w / 2, h / 2, w / 2])
+    return tf.cast(base_anchors, dtype=tf.float32)
 
 def generate_anchors(hyper_params):
     """Broadcasting base_anchors and generating all anchors for given image parameters.
@@ -36,31 +29,21 @@ def generate_anchors(hyper_params):
         anchors = (output_width * output_height * anchor_count, [y1, x1, y2, x2])
             these values in normalized format between [0, 1]
     """
-    img_size = hyper_params["img_size"]
     anchor_count = hyper_params["anchor_count"]
-    stride = hyper_params["stride"]
-    output_height, output_width = img_size // stride, img_size // stride
+    feature_map_shape = hyper_params["feature_map_shape"]
     #
-    grid_x = np.arange(0, output_width) * stride
-    grid_y = np.arange(0, output_height) * stride
+    stride = 1 / feature_map_shape
+    grid_coords = tf.cast(tf.range(0, feature_map_shape) / feature_map_shape + stride / 2, dtype=tf.float32)
     #
-    width_padding = (img_size - output_width * stride) / 2
-    height_padding = (img_size - output_height * stride) / 2
-    grid_x = width_padding + grid_x
-    grid_y = height_padding + grid_y
-    #
-    grid_y, grid_x = np.meshgrid(grid_y, grid_x)
-    grid_map = np.vstack((grid_y.ravel(), grid_x.ravel(), grid_y.ravel(), grid_x.ravel())).transpose()
+    grid_x, grid_y = tf.meshgrid(grid_coords, grid_coords)
+    flat_grid_x, flat_grid_y = tf.reshape(grid_x, (-1, )), tf.reshape(grid_y, (-1, ))
+    grid_map = tf.stack([flat_grid_y, flat_grid_x, flat_grid_y, flat_grid_x], axis=-1)
     #
     base_anchors = generate_base_anchors(hyper_params)
     #
-    output_area = grid_map.shape[0]
-    anchors = base_anchors.reshape((1, anchor_count, 4)) + \
-              grid_map.reshape((1, output_area, 4)).transpose((1, 0, 2))
-    anchors = anchors.reshape((output_area * anchor_count, 4)).astype(np.float32)
-    anchors = normalize_bboxes(anchors, float(img_size), float(img_size))
-    anchors = tf.clip_by_value(anchors, 0, 1)
-    return anchors
+    anchors = tf.reshape(base_anchors, (1, -1, 4)) + tf.reshape(grid_map, (-1, 1, 4))
+    anchors = tf.reshape(anchors, (-1, 4))
+    return tf.clip_by_value(anchors, 0, 1)
 
 def non_max_suppression(pred_bboxes, pred_labels, **kwargs):
     """Applying non maximum suppression.

@@ -35,8 +35,19 @@ def handle_args():
     """
     parser = argparse.ArgumentParser(description="Faster-RCNN Implementation")
     parser.add_argument("-handle-gpu", action="store_true", help="Tensorflow 2 GPU compatibility flag")
+    parser.add_argument("--backbone", required=False,
+                        default="vgg16",
+                        metavar="['vgg16']",
+                        help="Which backbone used for the rpn")
     args = parser.parse_args()
     return args
+
+def is_valid_backbone(backbone):
+    """Handling control of given backbone is valid or not.
+    inputs:
+        backbone = given string from command line
+    """
+    assert backbone in ["vgg16"]
 
 def handle_gpu_compatibility():
     """Handling of GPU issues for cuDNN initialize error and memory issues."""

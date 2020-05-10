@@ -2,7 +2,16 @@ import tensorflow as tf
 import math
 from . import bbox_utils
 
-def get_hyper_params(**kwargs):
+RPN = {
+    "vgg16": {
+        "img_size": 500,
+        "feature_map_shape": 31,
+        "anchor_ratios": [1., 2., 1./2.],
+        "anchor_scales": [128, 256, 512],
+    }
+}
+
+def get_hyper_params(backbone, **kwargs):
     """Generating hyper params in a dynamic way.
     inputs:
         **kwargs = any value could be updated in the hyper_params
@@ -10,20 +19,15 @@ def get_hyper_params(**kwargs):
     outputs:
         hyper_params = dictionary
     """
-    hyper_params = {
-        "img_size": 500,
-        "anchor_ratios": [0.5, 1, 2],
-        "anchor_scales": [128, 256, 512],
-        "variances": [0.1, 0.1, 0.2, 0.2],
-        "stride": 16,
-        "pre_nms_topn": 6000,
-        "train_nms_topn": 1500,
-        "test_nms_topn": 300,
-        "nms_iou_threshold": 0.7,
-        "total_pos_bboxes": 128,
-        "total_neg_bboxes": 128,
-        "pooling_size": (7, 7),
-    }
+    hyper_params = RPN[backbone]
+    hyper_params["pre_nms_topn"] = 6000
+    hyper_params["train_nms_topn"] = 1500
+    hyper_params["test_nms_topn"] = 300
+    hyper_params["nms_iou_threshold"] = 0.7
+    hyper_params["total_pos_bboxes"] = 128
+    hyper_params["total_neg_bboxes"] = 128
+    hyper_params["pooling_size"] = (7, 7)
+    hyper_params["variances"] = [0.1, 0.1, 0.2, 0.2]
     for key, value in kwargs.items():
         if key in hyper_params and value:
             hyper_params[key] = value
@@ -71,9 +75,9 @@ def faster_rcnn_generator(dataset, anchors, hyper_params):
     """
     while True:
         for image_data in dataset:
-            _, gt_boxes, gt_labels = image_data
-            input_img, bbox_deltas, bbox_labels = get_rpn_step_data(image_data, anchors, hyper_params)
-            yield (input_img, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
+            img, gt_boxes, gt_labels = image_data
+            bbox_deltas, bbox_labels = calculate_rpn_actual_outputs(anchors, gt_boxes, gt_labels, hyper_params)
+            yield (img, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
 
 def rpn_generator(dataset, anchors, hyper_params):
     """Tensorflow data generator for fit method, yielding inputs and outputs.
@@ -88,36 +92,31 @@ def rpn_generator(dataset, anchors, hyper_params):
     """
     while True:
         for image_data in dataset:
-            input_img, bbox_deltas, bbox_labels = get_rpn_step_data(image_data, anchors, hyper_params)
-            yield input_img, (bbox_deltas, bbox_labels)
+            img, gt_boxes, gt_labels = image_data
+            bbox_deltas, bbox_labels = calculate_rpn_actual_outputs(anchors, gt_boxes, gt_labels, hyper_params)
+            yield img, (bbox_deltas, bbox_labels)
 
-def get_rpn_step_data(image_data, anchors, hyper_params):
+def calculate_rpn_actual_outputs(anchors, gt_boxes, gt_labels, hyper_params):
     """Generating one step data for training or inference.
     Batch operations supported.
     inputs:
-        image_data =
-            img (batch_size, height, width, channels)
-            gt_boxes (batch_size, gt_box_size, [y1, x1, y2, x2])
-                these values in normalized format between [0, 1]
-            gt_labels (batch_size, gt_box_size)
         anchors = (total_anchors, [y1, x1, y2, x2])
             these values in normalized format between [0, 1]
+        gt_boxes (batch_size, gt_box_size, [y1, x1, y2, x2])
+            these values in normalized format between [0, 1]
+        gt_labels (batch_size, gt_box_size)
         hyper_params = dictionary
 
     outputs:
-        input_img = (batch_size, height, width, channels)
         bbox_deltas = (batch_size, total_anchors, [delta_y, delta_x, delta_h, delta_w])
-        bbox_labels = (batch_size, output_height, output_width, anchor_count)
+        bbox_labels = (batch_size, feature_map_shape, feature_map_shape, anchor_count)
     """
-    img, gt_boxes, gt_labels = image_data
-    batch_size, image_height, image_width = tf.shape(img)[0], tf.shape(img)[1], tf.shape(img)[2]
-    stride = hyper_params["stride"]
+    batch_size = tf.shape(gt_boxes)[0]
+    feature_map_shape = hyper_params["feature_map_shape"]
     anchor_count = hyper_params["anchor_count"]
     total_pos_bboxes = hyper_params["total_pos_bboxes"]
     total_neg_bboxes = hyper_params["total_neg_bboxes"]
     variances = hyper_params["variances"]
-    output_height, output_width = image_height // stride, image_width // stride
-    total_anchors = anchors.shape[0]
     # Calculate iou values between each bboxes and ground truth boxes
     iou_map = bbox_utils.generate_iou_map(anchors, gt_boxes)
     # Get max index value for each row
@@ -154,10 +153,10 @@ def get_rpn_step_data(image_data, anchors, hyper_params):
     # Calculate delta values between anchors and ground truth bboxes
     bbox_deltas = bbox_utils.get_deltas_from_bboxes(anchors, expanded_gt_boxes) / variances
     #
-    # bbox_deltas = tf.reshape(bbox_deltas, (batch_size, output_height, output_width, anchor_count * 4))
-    bbox_labels = tf.reshape(bbox_labels, (batch_size, output_height, output_width, anchor_count))
+    # bbox_deltas = tf.reshape(bbox_deltas, (batch_size, feature_map_shape, feature_map_shape, anchor_count * 4))
+    bbox_labels = tf.reshape(bbox_labels, (batch_size, feature_map_shape, feature_map_shape, anchor_count))
     #
-    return img, bbox_deltas, bbox_labels
+    return bbox_deltas, bbox_labels
 
 def frcnn_cls_loss(*args):
     """Calculating faster rcnn class loss value.

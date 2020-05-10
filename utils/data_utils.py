@@ -1,6 +1,5 @@
 import os
 import tensorflow as tf
-import numpy as np
 import tensorflow_datasets as tfds
 from PIL import Image
 
@@ -118,7 +117,7 @@ def get_image_data_from_folder(custom_image_path, final_height, final_width):
             img_path = os.path.join(path, filename)
             image = Image.open(img_path)
             resized_image = image.resize((final_width, final_height), Image.LANCZOS)
-            img = tf.expand_dims(np.array(resized_image), 0)
+            img = tf.expand_dims(tf.keras.preprocessing.image.img_to_array(resized_image), 0)
             img = tf.image.convert_image_dtype(img, tf.float32)
             image_data.append((img, None, None))
         break
@@ -133,19 +132,3 @@ def get_padded_batch_params():
     padded_shapes = ([None, None, None], [None, None], [None,])
     padding_values = (tf.constant(0, tf.float32), tf.constant(0, tf.float32), tf.constant(-1, tf.int32))
     return padded_shapes, padding_values
-
-def calculate_max_height_width(imgs):
-    """Calculating max height and max width values for given imgs.
-    inputs:
-        imgs = (batch_size, height, width, channels)
-
-    outputs:
-        max_height = maximum height value of all images
-        max_width = maximum width value of all images
-    """
-    h_w_map = np.zeros((len(imgs), 2), dtype=np.int32)
-    for index, img in enumerate(imgs):
-        h_w_map[index, 0], h_w_map[index, 1], _ = img.shape
-    max_val = h_w_map.argmax(axis=0)
-    max_height, max_width = h_w_map[max_val[0], 0], h_w_map[max_val[1], 1]
-    return max_height, max_width

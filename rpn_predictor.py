@@ -1,6 +1,5 @@
 import tensorflow as tf
 from utils import io_utils, data_utils, train_utils, bbox_utils, drawing_utils
-from models.rpn_vgg16 import get_model
 
 args = io_utils.handle_args()
 if args.handle_gpu:
@@ -9,7 +8,13 @@ if args.handle_gpu:
 batch_size = 1
 # If you have trained faster rcnn model you can load weights from faster rcnn model
 load_weights_from_frcnn = False
-hyper_params = train_utils.get_hyper_params()
+backbone = args.backbone
+io_utils.is_valid_backbone(backbone)
+
+if backbone == "vgg16":
+    from models.rpn_vgg16 import get_model
+
+hyper_params = train_utils.get_hyper_params(backbone)
 
 test_data, dataset_info = data_utils.get_dataset("voc/2007", "test")
 labels = data_utils.get_labels(dataset_info)
@@ -35,13 +40,12 @@ for image_data in test_data:
     img, _, _ = image_data
     rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(img)
     #
-    total_anchors = anchors.shape[0]
-    rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, total_anchors, 4))
+    rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, -1, 4))
     rpn_bbox_deltas *= hyper_params["variances"]
-    rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors, 1))
+    rpn_labels = tf.reshape(rpn_labels, (batch_size, -1, 1))
     #
     rpn_bboxes = bbox_utils.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
-    rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, total_anchors, 1, 4))
+    rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, -1, 1, 4))
     #
     nms_bboxes, _, _, _ = bbox_utils.non_max_suppression(rpn_bboxes, rpn_labels,
                                                          max_output_size_per_class=hyper_params["test_nms_topn"],
