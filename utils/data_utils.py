@@ -2,6 +2,7 @@ import os
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from PIL import Image
+import numpy as np
 
 def preprocessing(image_data, final_height, final_width, apply_augmentation=False):
     """Image resizing operation handled before batch operations.
@@ -117,7 +118,7 @@ def get_image_data_from_folder(custom_image_path, final_height, final_width):
             img_path = os.path.join(path, filename)
             image = Image.open(img_path)
             resized_image = image.resize((final_width, final_height), Image.LANCZOS)
-            img = tf.expand_dims(tf.keras.preprocessing.image.img_to_array(resized_image), 0)
+            img = tf.expand_dims(np.array(resized_image), 0)
             img = tf.image.convert_image_dtype(img, tf.float32)
             image_data.append((img, None, None))
         break
