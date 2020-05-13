@@ -24,7 +24,7 @@ class RoIBBox(Layer):
 
     def get_config(self):
         config = super(RoIBBox, self).get_config()
-        config.update({"hyper_params": self.hyper_params, "anchors": self.anchors, "mode": self.mode})
+        config.update({"hyper_params": self.hyper_params, "anchors": self.anchors.numpy(), "mode": self.mode})
         return config
 
     def call(self, inputs):

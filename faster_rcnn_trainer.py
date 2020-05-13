@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
 from utils import io_utils, data_utils, train_utils, bbox_utils
 from models import faster_rcnn
 
@@ -10,6 +10,7 @@ if args.handle_gpu:
 batch_size = 4
 epochs = 50
 load_weights = False
+with_voc_2012 = True
 backbone = args.backbone
 io_utils.is_valid_backbone(backbone)
 
@@ -22,6 +23,13 @@ train_data, dataset_info = data_utils.get_dataset("voc/2007", "train+validation"
 val_data, _ = data_utils.get_dataset("voc/2007", "test")
 train_total_items = data_utils.get_total_item_size(dataset_info, "train+validation")
 val_total_items = data_utils.get_total_item_size(dataset_info, "test")
+
+if with_voc_2012:
+    voc_2012_data, voc_2012_info = data_utils.get_dataset("voc/2012", "train+validation")
+    voc_2012_total_items = data_utils.get_total_item_size(voc_2012_info, "train+validation")
+    train_total_items += voc_2012_total_items
+    train_data = train_data.concatenate(voc_2012_data)
+
 labels = data_utils.get_labels(dataset_info)
 # We add 1 class for background
 hyper_params["total_labels"] = len(labels) + 1
@@ -54,8 +62,10 @@ frcnn_model_path = io_utils.get_model_path("faster_rcnn")
 
 if load_weights:
     frcnn_model.load_weights(frcnn_model_path)
+log_path = io_utils.get_log_path("faster_rcnn", backbone)
 
 checkpoint_callback = ModelCheckpoint(frcnn_model_path, monitor="val_loss", save_best_only=True, save_weights_only=True)
+tensorboard_callback = TensorBoard(log_dir=log_path)
 
 step_size_train = train_utils.get_step_size(train_total_items, batch_size)
 step_size_val = train_utils.get_step_size(val_total_items, batch_size)
@@ -64,4 +74,4 @@ frcnn_model.fit(frcnn_train_feed,
                 validation_data=frcnn_val_feed,
                 validation_steps=step_size_val,
                 epochs=epochs,
-                callbacks=[checkpoint_callback])
+                callbacks=[checkpoint_callback, tensorboard_callback])

@@ -63,6 +63,6 @@ for image_data in test_data:
     #
     nms_bboxes, nmsed_scores, nmsed_classes, valid_detections = bbox_utils.non_max_suppression(valid_bboxes, valid_labels,
                                                                                                max_output_size_per_class=10,
-                                                                                               max_total_size=200, score_threshold=0.5)
+                                                                                               max_total_size=200, score_threshold=0.6)
     denormalized_bboxes = bbox_utils.denormalize_bboxes(nms_bboxes[0], img_size, img_size)
     drawing_utils.draw_bboxes_with_labels(img[0], denormalized_bboxes, nmsed_classes[0], nmsed_scores[0], labels)

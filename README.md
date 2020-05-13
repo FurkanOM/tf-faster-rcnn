@@ -39,11 +39,11 @@ python faster_rcnn_trainer.py -handle-gpu
 
 ## Examples
 
-| Trained with VOC 2007 trainval data |
+| Trained with VOC 0712 trainval data |
 | -------------- |
-| ![Man riding bike](http://furkanomerustaoglu.com/wp-content/uploads/2020/04/man_riding_bike.png) |
+| ![Man riding bike](http://furkanomerustaoglu.com/wp-content/uploads/2020/05/man_with_bike_faster_rcnn.png) |
 | Photo by William Peynichou on Unsplash |
-| ![Airplanes](http://furkanomerustaoglu.com/wp-content/uploads/2020/04/airplanes.png) |
+| ![Airplanes](http://furkanomerustaoglu.com/wp-content/uploads/2020/05/planes_faster_rcnn.png) |
 | Photo by Vishu Gowda on Unsplash |
 
 ## Todo
