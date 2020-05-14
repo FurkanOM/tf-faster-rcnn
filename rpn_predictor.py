@@ -31,8 +31,8 @@ test_data = test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padd
 
 rpn_model, _ = get_model(hyper_params)
 
-frcnn_model_path = io_utils.get_model_path("faster_rcnn")
-rpn_model_path = io_utils.get_model_path("rpn")
+frcnn_model_path = io_utils.get_model_path("faster_rcnn", backbone)
+rpn_model_path = io_utils.get_model_path("rpn", backbone)
 model_path = frcnn_model_path if load_weights_from_frcnn else rpn_model_path
 rpn_model.load_weights(model_path, by_name=True)
 

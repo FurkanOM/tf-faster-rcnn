@@ -51,7 +51,7 @@ rpn_model, _ = get_model(hyper_params)
 rpn_model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                   loss=[train_utils.reg_loss, train_utils.rpn_cls_loss])
 # Load weights
-rpn_model_path = io_utils.get_model_path("rpn")
+rpn_model_path = io_utils.get_model_path("rpn", backbone)
 
 if load_weights:
     rpn_model.load_weights(rpn_model_path)

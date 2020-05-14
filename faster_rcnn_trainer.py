@@ -57,10 +57,10 @@ faster_rcnn.init_model(frcnn_model, hyper_params)
 # You can load rpn weights for faster training
 rpn_load_weights = False
 if rpn_load_weights:
-    rpn_model_path = io_utils.get_model_path("rpn")
+    rpn_model_path = io_utils.get_model_path("rpn", backbone)
     rpn_model.load_weights(rpn_model_path)
 # Load weights
-frcnn_model_path = io_utils.get_model_path("faster_rcnn")
+frcnn_model_path = io_utils.get_model_path("faster_rcnn", backbone)
 
 if load_weights:
     frcnn_model.load_weights(frcnn_model_path)

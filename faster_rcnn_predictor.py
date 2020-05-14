@@ -38,7 +38,7 @@ anchors = bbox_utils.generate_anchors(hyper_params)
 rpn_model, feature_extractor = get_rpn_model(hyper_params)
 frcnn_model = faster_rcnn.get_model(feature_extractor, rpn_model, anchors, hyper_params, mode=mode)
 #
-frcnn_model_path = io_utils.get_model_path("faster_rcnn")
+frcnn_model_path = io_utils.get_model_path("faster_rcnn", backbone)
 frcnn_model.load_weights(frcnn_model_path)
 
 background_label = "bg"
