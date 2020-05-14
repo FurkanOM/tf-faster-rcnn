@@ -4,7 +4,9 @@ This is tensorflow Faster-RCNN implementation from scratch supporting to the bat
 All methods are tried to be created in the simplest way for easy understanding.
 Most of the operations performed during the implementation were carried out as described in the [paper](https://arxiv.org/abs/1506.01497) and [tf-rpn](https://github.com/FurkanOM/tf-rpn) repository.
 
-It's implemented and tested with **tensorflow 2.0**
+It's implemented and tested with **tensorflow 2.0**.
+
+[MobileNetV2](https://www.tensorflow.org/api_docs/python/tf/keras/applications/MobileNetV2) and [VGG16](https://www.tensorflow.org/api_docs/python/tf/keras/applications/VGG16) backbones are supported.
 
 ## Usage
 
@@ -17,18 +19,22 @@ To create virtual environment (tensorflow-2 gpu environment):
 conda env create -f environment.yml
 ```
 
+There are two different backbone, first one the legacy **vgg16** backbone and the second and default one is **mobilenet_v2**.
+You can easily specify the backbone to be used with the **--backbone** parameter.
+Default backbone is **mobilenet_v2**.
+
 To train and test Faster-RCNN model:
 
 ```sh
-python faster_rcnn_trainer.py
-python faster_rcnn_predictor.py
+python faster_rcnn_trainer.py --backbone mobilenet_v2
+python faster_rcnn_predictor.py --backbone mobilenet_v2
 ```
 
 You can also train and test RPN alone:
 
 ```sh
-python rpn_trainer.py
-python rpn_predictor.py
+python rpn_trainer.py --backbone vgg16
+python rpn_predictor.py --backbone vgg16
 ```
 
 If you have GPU issues you can use **-handle-gpu** flag with these commands:
@@ -51,11 +57,13 @@ python faster_rcnn_trainer.py -handle-gpu
 * [x] Batch support
 * [x] Predictors and test results
 * [x] Inline documentation
-* [ ] MobileNetV2 backbone support ([MobileNetV2](https://www.tensorflow.org/api_docs/python/tf/keras/applications/MobileNetV2))
+* [x] MobileNetV2 backbone support ([MobileNetV2](https://www.tensorflow.org/api_docs/python/tf/keras/applications/MobileNetV2))
 
 ### References
 
-* [VOC 2007 Dataset](http://www.pascal-network.org/challenges/VOC/voc2007/workshop/index.html)
-* [Mask RCNN](https://github.com/matterport/Mask_RCNN) - especially for the construction of the model
-* [keras-frcnn](https://github.com/small-yellow-duck/keras-frcnn)
-* [PyTorch Faster RCNN](https://github.com/rbgirshick/py-faster-rcnn)
+* VOC 2007 Dataset [[dataset]](http://www.pascal-network.org/challenges/VOC/voc2007/workshop/index.html)
+* VOC 2012 Dataset [[dataset]](http://www.pascal-network.org/challenges/VOC/voc2012/workshop/index.html)
+* Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks [[paper]](https://arxiv.org/abs/1506.01497)
+* Mask RCNN [[code]](https://github.com/matterport/Mask_RCNN)
+* keras-frcnn [[code]](https://github.com/small-yellow-duck/keras-frcnn)
+* PyTorch Faster RCNN [[code]](https://github.com/rbgirshick/py-faster-rcnn)

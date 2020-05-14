@@ -36,7 +36,7 @@ def handle_args():
     parser = argparse.ArgumentParser(description="Faster-RCNN Implementation")
     parser.add_argument("-handle-gpu", action="store_true", help="Tensorflow 2 GPU compatibility flag")
     parser.add_argument("--backbone", required=False,
-                        default="vgg16",
+                        default="mobilenet_v2",
                         metavar="['vgg16', 'mobilenet_v2']",
                         help="Which backbone used for the rpn")
     args = parser.parse_args()

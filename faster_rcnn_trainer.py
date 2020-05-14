@@ -10,7 +10,7 @@ if args.handle_gpu:
 batch_size = 4
 epochs = 50
 load_weights = False
-with_voc_2012 = False
+with_voc_2012 = True
 backbone = args.backbone
 io_utils.is_valid_backbone(backbone)
 
