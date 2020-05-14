@@ -162,10 +162,10 @@ class RoIPooling(Layer):
         final_pooling_feature_map = tf.reshape(pooling_feature_map, (batch_size, total_bboxes, pooling_feature_map.shape[1], pooling_feature_map.shape[2], pooling_feature_map.shape[3]))
         return final_pooling_feature_map
 
-def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
+def get_model(feature_extractor, rpn_model, anchors, hyper_params, mode="training"):
     """Generating rpn model for given backbone base model and hyper params.
     inputs:
-        base_model = tf.keras.model pretrained backbone
+        feature_extractor = feature extractor layer from the base model
         rpn_model = tf.keras.model generated rpn model
         anchors = (total_anchors, [y1, x1, y2, x2])
             these values in normalized format between [0, 1]
@@ -175,12 +175,12 @@ def get_model(base_model, rpn_model, anchors, hyper_params, mode="training"):
     outputs:
         frcnn_model = tf.keras.model
     """
-    input_img = base_model.input
+    input_img = rpn_model.input
     rpn_reg_predictions, rpn_cls_predictions = rpn_model.output
     #
     roi_bboxes = RoIBBox(anchors, mode, hyper_params, name="roi_bboxes")([rpn_reg_predictions, rpn_cls_predictions])
     #
-    roi_pooled = RoIPooling(hyper_params, name="roi_pooling")([base_model.output, roi_bboxes])
+    roi_pooled = RoIPooling(hyper_params, name="roi_pooling")([feature_extractor.output, roi_bboxes])
     #
     output = TimeDistributed(Flatten(), name="frcnn_flatten")(roi_pooled)
     output = TimeDistributed(Dense(4096, activation="relu"), name="frcnn_fc1")(output)

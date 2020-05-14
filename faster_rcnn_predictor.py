@@ -13,7 +13,9 @@ custom_image_path = "data/images/"
 backbone = args.backbone
 io_utils.is_valid_backbone(backbone)
 
-if backbone == "vgg16":
+if backbone == "mobilenet_v2":
+    from models.rpn_mobilenet_v2 import get_model as get_rpn_model
+else:
     from models.rpn_vgg16 import get_model as get_rpn_model
 
 hyper_params = train_utils.get_hyper_params(backbone)
@@ -33,8 +35,8 @@ else:
     test_data = test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 #
 anchors = bbox_utils.generate_anchors(hyper_params)
-rpn_model, base_model = get_rpn_model(hyper_params)
-frcnn_model = faster_rcnn.get_model(base_model, rpn_model, anchors, hyper_params, mode=mode)
+rpn_model, feature_extractor = get_rpn_model(hyper_params)
+frcnn_model = faster_rcnn.get_model(feature_extractor, rpn_model, anchors, hyper_params, mode=mode)
 #
 frcnn_model_path = io_utils.get_model_path("faster_rcnn")
 frcnn_model.load_weights(frcnn_model_path)

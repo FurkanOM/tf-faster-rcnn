@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.keras.applications.vgg16 import VGG16
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
 from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.models import Model, Sequential
 
@@ -13,8 +13,8 @@ def get_model(hyper_params):
         feature_extractor = feature extractor layer from the base model
     """
     img_size = hyper_params["img_size"]
-    base_model = VGG16(include_top=False, input_shape=(img_size, img_size, 3))
-    feature_extractor = base_model.get_layer("block5_conv3")
+    base_model = MobileNetV2(include_top=False, input_shape=(img_size, img_size, 3))
+    feature_extractor = base_model.get_layer("block_13_expand_relu")
     output = Conv2D(512, (3, 3), activation="relu", padding="same", name="rpn_conv")(feature_extractor.output)
     rpn_cls_output = Conv2D(hyper_params["anchor_count"], (1, 1), activation="sigmoid", name="rpn_cls")(output)
     rpn_reg_output = Conv2D(hyper_params["anchor_count"] * 4, (1, 1), activation="linear", name="rpn_reg")(output)

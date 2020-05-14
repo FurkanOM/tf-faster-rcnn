@@ -8,6 +8,12 @@ RPN = {
         "feature_map_shape": 31,
         "anchor_ratios": [1., 2., 1./2.],
         "anchor_scales": [128, 256, 512],
+    },
+    "mobilenet_v2": {
+        "img_size": 500,
+        "feature_map_shape": 32,
+        "anchor_ratios": [1., 2., 1./2.],
+        "anchor_scales": [128, 256, 512],
     }
 }
 

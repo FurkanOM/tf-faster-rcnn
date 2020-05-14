@@ -11,7 +11,9 @@ load_weights_from_frcnn = False
 backbone = args.backbone
 io_utils.is_valid_backbone(backbone)
 
-if backbone == "vgg16":
+if backbone == "mobilenet_v2":
+    from models.rpn_mobilenet_v2 import get_model
+else:
     from models.rpn_vgg16 import get_model
 
 hyper_params = train_utils.get_hyper_params(backbone)

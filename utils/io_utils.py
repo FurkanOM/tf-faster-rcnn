@@ -37,7 +37,7 @@ def handle_args():
     parser.add_argument("-handle-gpu", action="store_true", help="Tensorflow 2 GPU compatibility flag")
     parser.add_argument("--backbone", required=False,
                         default="vgg16",
-                        metavar="['vgg16']",
+                        metavar="['vgg16', 'mobilenet_v2']",
                         help="Which backbone used for the rpn")
     args = parser.parse_args()
     return args
@@ -47,7 +47,7 @@ def is_valid_backbone(backbone):
     inputs:
         backbone = given string from command line
     """
-    assert backbone in ["vgg16"]
+    assert backbone in ["vgg16", "mobilenet_v2"]
 
 def handle_gpu_compatibility():
     """Handling of GPU issues for cuDNN initialize error and memory issues."""
