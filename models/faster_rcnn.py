@@ -3,6 +3,60 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Lambda, Input, Conv2D, TimeDistributed, Dense, Flatten, BatchNormalization, Dropout
 from utils import bbox_utils, train_utils
 
+class Decoder(Layer):
+    """Generating bounding boxes and labels from faster rcnn predictions.
+    First calculating the boxes from predicted deltas and label probs.
+    Then applied non max suppression and selecting top_n boxes by scores.
+    inputs:
+        roi_bboxes = (batch_size, roi_bbox_size, [y1, x1, y2, x2])
+        pred_deltas = (batch_size, roi_bbox_size, total_labels * [delta_y, delta_x, delta_h, delta_w])
+        pred_label_probs = (batch_size, roi_bbox_size, total_labels)
+    outputs:
+        pred_bboxes = (batch_size, top_n, [y1, x1, y2, x2])
+        pred_labels = (batch_size, top_n)
+            1 to total label number
+        pred_scores = (batch_size, top_n)
+    """
+    def __init__(self, variances, total_labels, max_total_size=200, score_threshold=0.5, **kwargs):
+        super(Decoder, self).__init__(**kwargs)
+        self.variances = variances
+        self.total_labels = total_labels
+        self.max_total_size = max_total_size
+        self.score_threshold = score_threshold
+
+    def get_config(self):
+        config = super(Decoder, self).get_config()
+        config.update({
+            "variances": self.variances,
+            "total_labels": self.total_labels,
+            "max_total_size": self.max_total_size,
+            "score_threshold": self.score_threshold
+        })
+        return config
+
+    def call(self, inputs):
+        roi_bboxes = inputs[0]
+        pred_deltas = inputs[1]
+        pred_label_probs = inputs[2]
+        batch_size = tf.shape(pred_deltas)[0]
+        #
+        pred_deltas = tf.reshape(pred_deltas, (batch_size, -1, self.total_labels, 4))
+        pred_deltas *= self.variances
+        #
+        expanded_roi_bboxes = tf.tile(tf.expand_dims(roi_bboxes, -2), (1, 1, self.total_labels, 1))
+        pred_bboxes = bbox_utils.get_bboxes_from_deltas(expanded_roi_bboxes, pred_deltas)
+        #
+        pred_labels_map = tf.expand_dims(tf.argmax(pred_label_probs, -1), -1)
+        pred_labels = tf.where(tf.not_equal(pred_labels_map, 0), pred_label_probs, tf.zeros_like(pred_label_probs))
+        #
+        final_bboxes, final_scores, final_labels, _ = bbox_utils.non_max_suppression(
+                                                                    pred_bboxes, pred_labels,
+                                                                    max_output_size_per_class=self.max_total_size,
+                                                                    max_total_size=self.max_total_size,
+                                                                    score_threshold=self.score_threshold)
+        #
+        return final_bboxes, final_labels, final_scores
+
 class RoIBBox(Layer):
     """Generating bounding boxes from rpn predictions.
     First calculating the boxes from predicted deltas and label probs.
@@ -217,8 +271,9 @@ def get_model(feature_extractor, rpn_model, anchors, hyper_params, mode="trainin
             frcnn_model.add_metric(layer.output, name=layer_name, aggregation="mean")
         #
     else:
-        frcnn_model = Model(inputs=input_img, outputs=[roi_bboxes, rpn_reg_predictions, rpn_cls_predictions,
-                                                       frcnn_reg_predictions, frcnn_cls_predictions])
+        bboxes, labels, scores = Decoder(hyper_params["variances"], hyper_params["total_labels"], name="faster_rcnn_decoder")(
+                                         [roi_bboxes, frcnn_reg_predictions, frcnn_cls_predictions])
+        frcnn_model = Model(inputs=input_img, outputs=[bboxes, labels, scores])
         #
     return frcnn_model
 
