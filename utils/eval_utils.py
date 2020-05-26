@@ -5,6 +5,8 @@ from utils import bbox_utils
 def init_stats(labels):
     stats = {}
     for i, label in enumerate(labels):
+        if i == 0:
+            continue
         stats[i] = {
             "label": label,
             "total": 0,
@@ -50,26 +52,18 @@ def update_stats(pred_bboxes, pred_labels, pred_scores, gt_boxes, gt_labels, sta
     return stats
 
 def calculate_ap(recall, precision):
-    recall_values = np.linspace(0, 1, 11)
-    recall_values = list(recall_values[::-1])
-    rho_interp = []
-    for r in recall_values:
-        # Obtain all recall values higher or equal than r
-        arg_greater_recalls = np.argwhere(recall >= r)
-        pmax = 0
-        # If there are recalls above r
-        if arg_greater_recalls.size != 0:
-            pmax = max(precision[arg_greater_recalls.min():])
-        rho_interp.append(pmax)
+    ap = 0
+    for r in np.arange(0, 1.1, 0.1):
+        prec_rec = precision[recall >= r]
+        if len(prec_rec) > 0:
+            ap += np.amax(prec_rec)
     # By definition AP = sum(max(precision whose recall is above r))/11
-    ap = sum(rho_interp) / 11
+    ap /= 11
     return ap
 
 def calculate_mAP(stats):
     aps = []
     for label in stats:
-        if label == 0:
-            continue
         label_stats = stats[label]
         tp = np.array(label_stats["tp"])
         fp = np.array(label_stats["fp"])
