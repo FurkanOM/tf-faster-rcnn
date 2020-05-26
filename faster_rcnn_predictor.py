@@ -1,13 +1,13 @@
 import tensorflow as tf
-from utils import io_utils, data_utils, train_utils, bbox_utils, drawing_utils
+from utils import io_utils, data_utils, train_utils, bbox_utils, drawing_utils, eval_utils
 from models import faster_rcnn
 
 args = io_utils.handle_args()
 if args.handle_gpu:
     io_utils.handle_gpu_compatibility()
 
-mode = "inference"
 batch_size = 4
+evaluate = False
 use_custom_images = False
 custom_image_path = "data/images/"
 backbone = args.backbone
@@ -35,14 +35,23 @@ else:
 #
 anchors = bbox_utils.generate_anchors(hyper_params)
 rpn_model, feature_extractor = get_rpn_model(hyper_params)
-frcnn_model = faster_rcnn.get_model(feature_extractor, rpn_model, anchors, hyper_params, mode=mode)
+frcnn_model = faster_rcnn.get_model(feature_extractor, rpn_model, anchors, hyper_params, mode="inference")
 #
 frcnn_model_path = io_utils.get_model_path("faster_rcnn", backbone)
 frcnn_model.load_weights(frcnn_model_path)
 
+stats = eval_utils.init_stats(labels)
+
 for image_data in test_data:
-    imgs, _, _ = image_data
+    imgs, gt_boxes, gt_labels = image_data
     pred_bboxes, pred_labels, pred_scores = frcnn_model.predict_on_batch(imgs)
+    if evaluate:
+        stats = eval_utils.update_stats(pred_bboxes, pred_labels, pred_scores, gt_boxes, gt_labels, stats)
+        continue
     for i, img in enumerate(imgs):
         denormalized_bboxes = bbox_utils.denormalize_bboxes(pred_bboxes[i], img_size, img_size)
         drawing_utils.draw_bboxes_with_labels(img, denormalized_bboxes, pred_labels[i], pred_scores[i], labels)
+
+if evaluate:
+    stats, mAP = eval_utils.calculate_mAP(stats)
+    print("mAP: {}".format(float(mAP)))
