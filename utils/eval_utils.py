@@ -20,6 +20,7 @@ def update_stats(pred_bboxes, pred_labels, pred_scores, gt_boxes, gt_labels, sta
     iou_map = bbox_utils.generate_iou_map(pred_bboxes, gt_boxes)
     merged_iou_map = tf.reduce_max(iou_map, axis=-1)
     max_indices_each_gt = tf.argmax(iou_map, axis=-1, output_type=tf.int32)
+    sorted_ids = tf.argsort(merged_iou_map, direction="DESCENDING")
     #
     count_holder = tf.unique_with_counts(tf.reshape(gt_labels, (-1,)))
     for i, gt_label in enumerate(count_holder[0]):
@@ -27,17 +28,18 @@ def update_stats(pred_bboxes, pred_labels, pred_scores, gt_boxes, gt_labels, sta
             continue
         gt_label = int(gt_label)
         stats[gt_label]["total"] += int(count_holder[2][i])
-    for batch_id, merged_iou in enumerate(merged_iou_map):
+    for batch_id, m in enumerate(merged_iou_map):
         true_labels = []
-        for pred_id, pred_label in enumerate(pred_labels[batch_id]):
+        for i, sorted_id in enumerate(sorted_ids[batch_id]):
+            pred_label = pred_labels[batch_id, sorted_id]
             if pred_label == 0:
                 continue
             #
-            iou = merged_iou_map[batch_id, pred_id]
-            gt_id = max_indices_each_gt[batch_id, pred_id]
+            iou = merged_iou_map[batch_id, sorted_id]
+            gt_id = max_indices_each_gt[batch_id, sorted_id]
             gt_label = int(gt_labels[batch_id, gt_id])
             pred_label = int(pred_label)
-            score = pred_scores[batch_id, pred_id]
+            score = pred_scores[batch_id, sorted_id]
             stats[pred_label]["scores"].append(score)
             stats[pred_label]["tp"].append(0)
             stats[pred_label]["fp"].append(0)
