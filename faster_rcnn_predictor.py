@@ -29,7 +29,7 @@ img_size = hyper_params["img_size"]
 if use_custom_images:
     test_data = data_utils.get_image_data_from_folder(custom_image_path, img_size, img_size)
 else:
-    test_data = test_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size))
+    test_data = test_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size, evaluate=evaluate))
     padded_shapes, padding_values = data_utils.get_padded_batch_params()
     test_data = test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
 #
