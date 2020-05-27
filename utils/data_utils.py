@@ -21,7 +21,7 @@ def preprocessing(image_data, final_height, final_width, apply_augmentation=Fals
     if evaluate:
         not_diff = tf.logical_not(image_data["objects"]["is_difficult"])
         gt_boxes = gt_boxes[not_diff]
-        gt_labels = gt_labes[not_diff]
+        gt_labels = gt_labels[not_diff]
     img = tf.image.convert_image_dtype(img, tf.float32)
     img = tf.image.resize(img, (final_height, final_width))
     if apply_augmentation:
