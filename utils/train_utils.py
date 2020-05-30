@@ -1,6 +1,6 @@
 import tensorflow as tf
 import math
-from . import bbox_utils
+from utils import bbox_utils
 
 RPN = {
     "vgg16": {

@@ -103,6 +103,38 @@ def get_labels(info):
     """
     return info.features["labels"].names
 
+def get_custom_imgs(custom_image_path):
+    """Generating a list of images for given path.
+    inputs:
+        custom_image_path = folder of the custom images
+    outputs:
+        custom image list = [path1, path2]
+    """
+    img_paths = []
+    for path, dir, filenames in os.walk(custom_image_path):
+        for filename in filenames:
+            img_paths.append(os.path.join(path, filename))
+        break
+    return img_paths
+
+def custom_data_generator(img_paths, final_height, final_width):
+    """Yielding custom entities as dataset.
+    inputs:
+        img_paths = custom image paths
+        final_height = final image height after resizing
+        final_width = final image width after resizing
+    outputs:
+        img = (final_height, final_width, depth)
+        dummy_gt_boxes = (None, None)
+        dummy_gt_labels = (None, )
+    """
+    for img_path in img_paths:
+        image = Image.open(img_path)
+        resized_image = image.resize((final_width, final_height), Image.LANCZOS)
+        img = np.array(resized_image)
+        img = tf.image.convert_image_dtype(img, tf.float32)
+        yield img, tf.constant([[]], dtype=tf.float32), tf.constant([], dtype=tf.int32)
+
 def get_image_data_from_folder(custom_image_path, final_height, final_width):
     """Generating image data like tensorflow dataset format for a given image path.
     This method could be used for custom image predictions.
@@ -124,16 +156,27 @@ def get_image_data_from_folder(custom_image_path, final_height, final_width):
             resized_image = image.resize((final_width, final_height), Image.LANCZOS)
             img = tf.expand_dims(np.array(resized_image), 0)
             img = tf.image.convert_image_dtype(img, tf.float32)
-            image_data.append((img, None, None))
+            image_data.append((img, np.array([[]]), np.array([])))
         break
     return image_data
 
-def get_padded_batch_params():
-    """Generating padded batch params for tensorflow datasets.
+def get_data_types():
+    """Generating data types for tensorflow datasets.
     outputs:
-        padded_shapes = output shapes for (images, ground truth boxes, labels)
-        padding_values = padding values with dtypes for (images, ground truth boxes, labels)
+        data types = output data types for (images, ground truth boxes, ground truth labels)
     """
-    padded_shapes = ([None, None, None], [None, None], [None,])
-    padding_values = (tf.constant(0, tf.float32), tf.constant(0, tf.float32), tf.constant(-1, tf.int32))
-    return padded_shapes, padding_values
+    return (tf.float32, tf.float32, tf.int32)
+
+def get_data_shapes():
+    """Generating data shapes for tensorflow datasets.
+    outputs:
+        data shapes = output data shapes for (images, ground truth boxes, ground truth labels)
+    """
+    return ([None, None, None], [None, None], [None,])
+
+def get_padding_values():
+    """Generating padding values for missing values in batch for tensorflow datasets.
+    outputs:
+        padding values = padding values with dtypes for (images, ground truth boxes, ground truth labels)
+    """
+    return (tf.constant(0, tf.float32), tf.constant(0, tf.float32), tf.constant(-1, tf.int32))

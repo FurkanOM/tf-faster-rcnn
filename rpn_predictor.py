@@ -26,8 +26,9 @@ hyper_params["total_labels"] = len(labels) + 1
 img_size = hyper_params["img_size"]
 test_data = test_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size))
 
-padded_shapes, padding_values = data_utils.get_padded_batch_params()
-test_data = test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+data_shapes = data_utils.get_data_shapes()
+padding_values = data_utils.get_padding_values()
+test_data = test_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
 
 rpn_model, _ = get_model(hyper_params)
 

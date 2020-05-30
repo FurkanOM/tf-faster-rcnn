@@ -52,18 +52,12 @@ python faster_rcnn_trainer.py -handle-gpu
 | ![Airplanes](http://furkanomerustaoglu.com/wp-content/uploads/2020/05/planes_faster_rcnn.png) |
 | Photo by Vishu Gowda on Unsplash |
 
-## Todo
-
-* [x] Batch support
-* [x] Predictors and test results
-* [x] Inline documentation
-* [x] MobileNetV2 backbone support ([MobileNetV2](https://www.tensorflow.org/api_docs/python/tf/keras/applications/MobileNetV2))
-
 ### References
 
 * VOC 2007 Dataset [[dataset]](http://www.pascal-network.org/challenges/VOC/voc2007/workshop/index.html)
 * VOC 2012 Dataset [[dataset]](http://www.pascal-network.org/challenges/VOC/voc2012/workshop/index.html)
 * Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks [[paper]](https://arxiv.org/abs/1506.01497)
+* Object Detection Metrics [[code]](https://github.com/rafaelpadilla/Object-Detection-Metrics)
 * Mask RCNN [[code]](https://github.com/matterport/Mask_RCNN)
 * keras-frcnn [[code]](https://github.com/small-yellow-duck/keras-frcnn)
 * PyTorch Faster RCNN [[code]](https://github.com/rbgirshick/py-faster-rcnn)

@@ -21,17 +21,25 @@ else:
 hyper_params = train_utils.get_hyper_params(backbone)
 
 test_data, dataset_info = data_utils.get_dataset("voc/2007", "test")
+total_items = data_utils.get_total_item_size(dataset_info, "test")
 labels = data_utils.get_labels(dataset_info)
 labels = ["bg"] + labels
 hyper_params["total_labels"] = len(labels)
 img_size = hyper_params["img_size"]
 
+data_types = data_utils.get_data_types()
+data_shapes = data_utils.get_data_shapes()
+padding_values = data_utils.get_padding_values()
+
 if use_custom_images:
-    test_data = data_utils.get_image_data_from_folder(custom_image_path, img_size, img_size)
+    img_paths = data_utils.get_custom_imgs(custom_image_path)
+    total_items = len(img_paths)
+    test_data = tf.data.Dataset.from_generator(lambda: data_utils.custom_data_generator(
+                                               img_paths, img_size, img_size), data_types, data_shapes)
 else:
     test_data = test_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size, evaluate=evaluate))
-    padded_shapes, padding_values = data_utils.get_padded_batch_params()
-    test_data = test_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+#
+test_data = test_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
 #
 anchors = bbox_utils.generate_anchors(hyper_params)
 rpn_model, feature_extractor = get_rpn_model(hyper_params)
@@ -40,18 +48,10 @@ frcnn_model = faster_rcnn.get_model(feature_extractor, rpn_model, anchors, hyper
 frcnn_model_path = io_utils.get_model_path("faster_rcnn", backbone)
 frcnn_model.load_weights(frcnn_model_path)
 
-stats = eval_utils.init_stats(labels)
-
-for image_data in test_data:
-    imgs, gt_boxes, gt_labels = image_data
-    pred_bboxes, pred_labels, pred_scores = frcnn_model.predict_on_batch(imgs)
-    if evaluate:
-        stats = eval_utils.update_stats(pred_bboxes, pred_labels, pred_scores, gt_boxes, gt_labels, stats)
-        continue
-    for i, img in enumerate(imgs):
-        denormalized_bboxes = bbox_utils.denormalize_bboxes(pred_bboxes[i], img_size, img_size)
-        drawing_utils.draw_bboxes_with_labels(img, denormalized_bboxes, pred_labels[i], pred_scores[i], labels)
+step_size = train_utils.get_step_size(total_items, batch_size)
+pred_bboxes, pred_labels, pred_scores = frcnn_model.predict(test_data, steps=step_size, verbose=1)
 
 if evaluate:
-    stats, mAP = eval_utils.calculate_mAP(stats)
-    print("mAP: {}".format(float(mAP)))
+    eval_utils.evaluate_predictions(test_data, pred_bboxes, pred_labels, pred_scores, labels, batch_size)
+else:
+    drawing_utils.draw_predictions(test_data, pred_bboxes, pred_labels, pred_scores, labels, batch_size)

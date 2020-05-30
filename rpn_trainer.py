@@ -39,9 +39,10 @@ img_size = hyper_params["img_size"]
 train_data = train_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size, apply_augmentation=True))
 val_data = val_data.map(lambda x : data_utils.preprocessing(x, img_size, img_size))
 
-padded_shapes, padding_values = data_utils.get_padded_batch_params()
-train_data = train_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
-val_data = val_data.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
+data_shapes = data_utils.get_data_shapes()
+padding_values = data_utils.get_padding_values()
+train_data = train_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
+val_data = val_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
 
 anchors = bbox_utils.generate_anchors(hyper_params)
 rpn_train_feed = train_utils.rpn_generator(train_data, anchors, hyper_params)

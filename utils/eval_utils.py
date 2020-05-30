@@ -83,3 +83,15 @@ def calculate_mAP(stats):
         aps.append(ap)
     mAP = np.mean(aps)
     return stats, mAP
+
+def evaluate_predictions(dataset, pred_bboxes, pred_labels, pred_scores, labels, batch_size):
+    stats = init_stats(labels)
+    for batch_id, image_data in enumerate(dataset):
+        imgs, gt_boxes, gt_labels = image_data
+        start = batch_id * batch_size
+        end = start + batch_size
+        batch_bboxes, batch_labels, batch_scores = pred_bboxes[start:end], pred_labels[start:end], pred_scores[start:end]
+        stats = update_stats(batch_bboxes, batch_labels, batch_scores, gt_boxes, gt_labels, stats)
+    stats, mAP = calculate_mAP(stats)
+    print("mAP: {}".format(float(mAP)))
+    return stats
