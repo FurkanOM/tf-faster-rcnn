@@ -27,22 +27,19 @@ def draw_grid_map(img, grid_map, stride):
     plt.imshow(image)
     plt.show()
 
-def draw_bboxes(img, bboxes):
-    """Drawing bounding boxes on given image.
+def draw_bboxes(imgs, bboxes):
+    """Drawing bounding boxes on given images.
     inputs:
-        img = (batch_size, height, width, channels)
+        imgs = (batch_size, height, width, channels)
         bboxes = (batch_size, total_bboxes, [y1, x1, y2, x2])
             in normalized form [0, 1]
     """
     colors = tf.constant([[1, 0, 0, 1]], dtype=tf.float32)
-    img_with_bounding_boxes = tf.image.draw_bounding_boxes(
-        img,
-        bboxes,
-        colors
-    )
+    imgs_with_bb = tf.image.draw_bounding_boxes(imgs, bboxes, colors)
     plt.figure()
-    plt.imshow(img_with_bounding_boxes[0])
-    plt.show()
+    for img_with_bb in imgs_with_bb:
+        plt.imshow(img_with_bb)
+        plt.show()
 
 def draw_bboxes_with_labels(img, bboxes, label_indices, probs, labels):
     """Drawing bounding boxes with labels on given image.

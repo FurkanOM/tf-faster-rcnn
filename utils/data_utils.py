@@ -135,31 +135,6 @@ def custom_data_generator(img_paths, final_height, final_width):
         img = tf.image.convert_image_dtype(img, tf.float32)
         yield img, tf.constant([[]], dtype=tf.float32), tf.constant([], dtype=tf.int32)
 
-def get_image_data_from_folder(custom_image_path, final_height, final_width):
-    """Generating image data like tensorflow dataset format for a given image path.
-    This method could be used for custom image predictions.
-    inputs:
-        custom_image_path = folder of the custom images
-        final_height = final image height after resizing
-        final_width = final image width after resizing
-    outputs:
-        image_data = (img, dummy_gt_boxes, dummy_gt_labels)
-            img = (1, final_height, final_width, depth)
-            dummy_gt_boxes = None
-            dummy_gt_labels = None
-    """
-    image_data = []
-    for path, dir, filenames in os.walk(custom_image_path):
-        for filename in filenames:
-            img_path = os.path.join(path, filename)
-            image = Image.open(img_path)
-            resized_image = image.resize((final_width, final_height), Image.LANCZOS)
-            img = tf.expand_dims(np.array(resized_image), 0)
-            img = tf.image.convert_image_dtype(img, tf.float32)
-            image_data.append((img, np.array([[]]), np.array([])))
-        break
-    return image_data
-
 def get_data_types():
     """Generating data types for tensorflow datasets.
     outputs:
