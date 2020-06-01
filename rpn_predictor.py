@@ -44,13 +44,14 @@ for image_data in test_data:
     rpn_bbox_deltas, rpn_labels = rpn_model.predict_on_batch(img)
     #
     rpn_bbox_deltas = tf.reshape(rpn_bbox_deltas, (batch_size, -1, 4))
+    rpn_labels = tf.reshape(rpn_labels, (batch_size, -1))
+    #
     rpn_bbox_deltas *= hyper_params["variances"]
-    rpn_labels = tf.reshape(rpn_labels, (batch_size, -1, 1))
-    #
     rpn_bboxes = bbox_utils.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
-    rpn_bboxes = tf.reshape(rpn_bboxes, (batch_size, -1, 1, 4))
     #
-    nms_bboxes, _, _, _ = bbox_utils.non_max_suppression(rpn_bboxes, rpn_labels,
-                                                         max_output_size_per_class=hyper_params["test_nms_topn"],
-                                                         max_total_size=hyper_params["test_nms_topn"])
-    drawing_utils.draw_bboxes(img, nms_bboxes)
+    _, pre_indices = tf.nn.top_k(rpn_labels, 10)
+    #
+    pre_roi_bboxes = tf.gather(rpn_bboxes, pre_indices, batch_dims=1)
+    pre_roi_labels = tf.gather(rpn_labels, pre_indices, batch_dims=1)
+    #
+    drawing_utils.draw_bboxes(img, pre_roi_bboxes)
