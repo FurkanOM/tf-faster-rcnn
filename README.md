@@ -43,6 +43,20 @@ If you have GPU issues you can use **-handle-gpu** flag with these commands:
 python faster_rcnn_trainer.py -handle-gpu
 ```
 
+## Quality checks
+
+The repository now includes dependency-free local checks that do not require version upgrades.
+
+```sh
+make lint
+make test
+make check
+```
+
+`make lint` runs repository-local static checks for syntax, whitespace, and docstring coverage.
+`make test` runs the `unittest` suite.
+`make check` runs both commands in sequence.
+
 ## Examples
 
 | Trained with VOC 0712 trainval data |

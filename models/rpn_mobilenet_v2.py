@@ -1,16 +1,28 @@
+"""MobileNetV2-backed Region Proposal Network model definition."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, Tuple
+
 import tensorflow as tf
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
 from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.models import Model
 
-def get_model(hyper_params):
-    """Generating rpn model for given hyper params.
-    inputs:
-        hyper_params = dictionary
 
-    outputs:
-        rpn_model = tf.keras.model
-        feature_extractor = feature extractor layer from the base model
+HyperParams = Dict[str, Any]
+
+
+def get_model(hyper_params: HyperParams) -> Tuple[tf.keras.Model, tf.keras.layers.Layer]:
+    """Build the MobileNetV2 RPN model and expose its feature extractor layer.
+
+    Args:
+        hyper_params (Dict[str, Any]): Hyper-parameter dictionary containing image
+            size and anchor count.
+
+    Returns:
+        Tuple[tf.keras.Model, tf.keras.layers.Layer]: The RPN model and the
+        backbone feature extractor layer.
     """
     img_size = hyper_params["img_size"]
     base_model = MobileNetV2(include_top=False, input_shape=(img_size, img_size, 3))
@@ -21,9 +33,14 @@ def get_model(hyper_params):
     rpn_model = Model(inputs=base_model.input, outputs=[rpn_reg_output, rpn_cls_output])
     return rpn_model, feature_extractor
 
-def init_model(model):
-    """Initializing model with dummy data for load weights with optimizer state and also graph construction.
-    inputs:
-        model = tf.keras.model
+
+def init_model(model: tf.keras.Model) -> None:
+    """Warm up the model graph with dummy input before loading optimizer state.
+
+    Args:
+        model (tf.keras.Model): RPN model instance to initialize.
+
+    Returns:
+        None: The model graph is built in place.
     """
     model(tf.random.uniform((1, 500, 500, 3)))
