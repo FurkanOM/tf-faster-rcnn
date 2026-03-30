@@ -5,6 +5,7 @@ from __future__ import annotations
 import tensorflow as tf
 from utils import io_utils, data_utils, train_utils, bbox_utils, drawing_utils
 
+
 def main() -> None:
     """Run RPN inference from the command line.
 
@@ -20,12 +21,7 @@ def main() -> None:
     custom_image_path = "data/images/"
     load_weights_from_frcnn = False
     backbone = args.backbone
-    io_utils.is_valid_backbone(backbone)
-
-    if backbone == "mobilenet_v2":
-        from models.rpn_mobilenet_v2 import get_model
-    else:
-        from models.rpn_vgg16 import get_model
+    get_model = io_utils.get_rpn_model_builder(backbone)
 
     hyper_params = train_utils.get_hyper_params(backbone)
 
@@ -35,21 +31,17 @@ def main() -> None:
     hyper_params["total_labels"] = len(labels)
     img_size = hyper_params["img_size"]
 
-    data_types = data_utils.get_data_types()
-    data_shapes = data_utils.get_data_shapes()
-    padding_values = data_utils.get_padding_values()
-
     if use_custom_images:
         img_paths = data_utils.get_custom_imgs(custom_image_path)
-        test_data = tf.data.Dataset.from_generator(
-            lambda: data_utils.custom_data_generator(img_paths, img_size, img_size),
-            data_types,
-            data_shapes
-        )
+        test_data = data_utils.build_custom_dataset(img_paths, img_size, img_size)
     else:
-        test_data = test_data.map(lambda x: data_utils.preprocessing(x, img_size, img_size))
+        test_data = data_utils.build_dataset(test_data, img_size, img_size, batch_size)
 
-    test_data = test_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
+    test_data = test_data.padded_batch(
+        batch_size,
+        padded_shapes=data_utils.get_data_shapes(),
+        padding_values=data_utils.get_padding_values()
+    ) if use_custom_images else test_data
 
     rpn_model, _ = get_model(hyper_params)
 
@@ -67,6 +59,8 @@ def main() -> None:
         rpn_labels = tf.reshape(rpn_labels, (batch_size, -1))
         rpn_bbox_deltas *= hyper_params["variances"]
         rpn_bboxes = bbox_utils.get_bboxes_from_deltas(anchors, rpn_bbox_deltas)
+        # A quick visualization only needs the highest-scoring proposals before
+        # running the heavier Faster R-CNN second stage.
         _, top_indices = tf.nn.top_k(rpn_labels, 10)
         selected_rpn_bboxes = tf.gather(rpn_bboxes, top_indices, batch_dims=1)
         drawing_utils.draw_bboxes(imgs, selected_rpn_bboxes)

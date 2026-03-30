@@ -40,7 +40,7 @@ def get_hyper_params(backbone: str, **kwargs: Any) -> HyperParams:
     Returns:
         Dict[str, Any]: Hyper-parameter dictionary used by the training code.
     """
-    hyper_params = RPN[backbone]
+    hyper_params = dict(RPN[backbone])
     hyper_params["pre_nms_topn"] = 6000
     hyper_params["train_nms_topn"] = 1500
     hyper_params["test_nms_topn"] = 300
@@ -108,7 +108,7 @@ def faster_rcnn_generator(
     while True:
         for image_data in dataset:
             img, gt_boxes, gt_labels = image_data
-            bbox_deltas, bbox_labels = calculate_rpn_actual_outputs(anchors, gt_boxes, gt_labels, hyper_params)
+            bbox_deltas, bbox_labels = _get_rpn_training_targets(gt_boxes, gt_labels, anchors, hyper_params)
             yield (img, gt_boxes, gt_labels, bbox_deltas, bbox_labels), ()
 
 
@@ -132,8 +132,18 @@ def rpn_generator(
     while True:
         for image_data in dataset:
             img, gt_boxes, gt_labels = image_data
-            bbox_deltas, bbox_labels = calculate_rpn_actual_outputs(anchors, gt_boxes, gt_labels, hyper_params)
+            bbox_deltas, bbox_labels = _get_rpn_training_targets(gt_boxes, gt_labels, anchors, hyper_params)
             yield img, (bbox_deltas, bbox_labels)
+
+
+def _get_rpn_training_targets(
+    gt_boxes: tf.Tensor,
+    gt_labels: tf.Tensor,
+    anchors: tf.Tensor,
+    hyper_params: HyperParams
+) -> RPNOutputs:
+    """Build RPN targets for a single batched dataset element."""
+    return calculate_rpn_actual_outputs(anchors, gt_boxes, gt_labels, hyper_params)
 
 
 def calculate_rpn_actual_outputs(
@@ -172,11 +182,14 @@ def calculate_rpn_actual_outputs(
     valid_indices = tf.cast(tf.where(valid_indices_cond), tf.int32)
     valid_max_indices = max_indices_each_column[valid_indices_cond]
     scatter_bbox_indices = tf.stack([valid_indices[..., 0], valid_max_indices], 1)
+    # Every valid ground-truth box keeps at least one positive anchor even when
+    # its best IoU falls below the normal positive threshold.
     max_pos_mask = tf.scatter_nd(scatter_bbox_indices, tf.fill((tf.shape(valid_indices)[0],), True), tf.shape(pos_mask))
     pos_mask = tf.logical_or(pos_mask, max_pos_mask)
     pos_mask = randomly_select_xyz_mask(pos_mask, tf.constant([total_pos_bboxes], dtype=tf.int32))
     pos_count = tf.reduce_sum(tf.cast(pos_mask, tf.int32), axis=-1)
     neg_count = (total_pos_bboxes + total_neg_bboxes) - pos_count
+    # Negatives are sampled after positives so the final minibatch stays balanced.
     neg_mask = tf.logical_and(tf.less(merged_iou_map, 0.3), tf.logical_not(pos_mask))
     neg_mask = randomly_select_xyz_mask(neg_mask, neg_count)
     pos_labels = tf.where(pos_mask, tf.ones_like(pos_mask, dtype=tf.float32), tf.constant(-1.0, dtype=tf.float32))

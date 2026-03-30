@@ -5,8 +5,11 @@ from __future__ import annotations
 import argparse
 import os
 from datetime import datetime
+from typing import Any, Callable
 
 import tensorflow as tf
+
+VALID_BACKBONES = ("vgg16", "mobilenet_v2")
 
 
 def get_log_path(model_type: str, backbone: str = "vgg16", custom_postfix: str = "") -> str:
@@ -65,7 +68,24 @@ def is_valid_backbone(backbone: str) -> None:
     Returns:
         None: This function raises an `AssertionError` for unsupported values.
     """
-    assert backbone in ["vgg16", "mobilenet_v2"]
+    assert backbone in VALID_BACKBONES
+
+
+def get_rpn_model_builder(backbone: str) -> Callable[..., Any]:
+    """Return the RPN model factory for the selected backbone.
+
+    Args:
+        backbone (str): Backbone name received from the command line.
+
+    Returns:
+        Callable[..., Any]: Backbone-specific RPN model factory.
+    """
+    is_valid_backbone(backbone)
+    if backbone == "mobilenet_v2":
+        from models.rpn_mobilenet_v2 import get_model as get_rpn_model
+    else:
+        from models.rpn_vgg16 import get_model as get_rpn_model
+    return get_rpn_model
 
 
 def handle_gpu_compatibility() -> None:

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import tensorflow as tf
 from utils import io_utils, data_utils, train_utils, bbox_utils, drawing_utils, eval_utils
 from models import faster_rcnn
+
 
 def main() -> None:
     """Run Faster R-CNN inference or evaluation from the command line.
@@ -21,12 +21,7 @@ def main() -> None:
     use_custom_images = False
     custom_image_path = "data/images/"
     backbone = args.backbone
-    io_utils.is_valid_backbone(backbone)
-
-    if backbone == "mobilenet_v2":
-        from models.rpn_mobilenet_v2 import get_model as get_rpn_model
-    else:
-        from models.rpn_vgg16 import get_model as get_rpn_model
+    get_rpn_model = io_utils.get_rpn_model_builder(backbone)
 
     hyper_params = train_utils.get_hyper_params(backbone)
 
@@ -37,22 +32,20 @@ def main() -> None:
     hyper_params["total_labels"] = len(labels)
     img_size = hyper_params["img_size"]
 
-    data_types = data_utils.get_data_types()
-    data_shapes = data_utils.get_data_shapes()
-    padding_values = data_utils.get_padding_values()
-
     if use_custom_images:
         img_paths = data_utils.get_custom_imgs(custom_image_path)
         total_items = len(img_paths)
-        test_data = tf.data.Dataset.from_generator(
-            lambda: data_utils.custom_data_generator(img_paths, img_size, img_size),
-            data_types,
-            data_shapes
-        )
+        test_data = data_utils.build_custom_dataset(img_paths, img_size, img_size)
     else:
-        test_data = test_data.map(lambda x: data_utils.preprocessing(x, img_size, img_size, evaluate=evaluate))
+        test_data = data_utils.build_dataset(test_data, img_size, img_size, batch_size, evaluate=evaluate)
 
-    test_data = test_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
+    if use_custom_images:
+        test_data = test_data.padded_batch(
+            batch_size,
+            padded_shapes=data_utils.get_data_shapes(),
+            padding_values=data_utils.get_padding_values()
+        )
+
     anchors = bbox_utils.generate_anchors(hyper_params)
     rpn_model, feature_extractor = get_rpn_model(hyper_params)
     frcnn_model = faster_rcnn.get_model(feature_extractor, rpn_model, anchors, hyper_params, mode="inference")

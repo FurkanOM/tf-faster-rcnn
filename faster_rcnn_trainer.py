@@ -7,6 +7,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
 from utils import io_utils, data_utils, train_utils, bbox_utils
 from models import faster_rcnn
 
+
 def main() -> None:
     """Run Faster R-CNN training from the command line.
 
@@ -22,12 +23,7 @@ def main() -> None:
     load_weights = False
     with_voc_2012 = True
     backbone = args.backbone
-    io_utils.is_valid_backbone(backbone)
-
-    if backbone == "mobilenet_v2":
-        from models.rpn_mobilenet_v2 import get_model as get_rpn_model
-    else:
-        from models.rpn_vgg16 import get_model as get_rpn_model
+    get_rpn_model = io_utils.get_rpn_model_builder(backbone)
 
     hyper_params = train_utils.get_hyper_params(backbone)
 
@@ -45,13 +41,14 @@ def main() -> None:
     labels = data_utils.get_labels(dataset_info)
     hyper_params["total_labels"] = len(labels) + 1
     img_size = hyper_params["img_size"]
-    train_data = train_data.map(lambda x: data_utils.preprocessing(x, img_size, img_size, apply_augmentation=True))
-    val_data = val_data.map(lambda x: data_utils.preprocessing(x, img_size, img_size))
-
-    data_shapes = data_utils.get_data_shapes()
-    padding_values = data_utils.get_padding_values()
-    train_data = train_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
-    val_data = val_data.padded_batch(batch_size, padded_shapes=data_shapes, padding_values=padding_values)
+    train_data = data_utils.build_dataset(
+        train_data,
+        img_size,
+        img_size,
+        batch_size,
+        apply_augmentation=True
+    )
+    val_data = data_utils.build_dataset(val_data, img_size, img_size, batch_size)
 
     anchors = bbox_utils.generate_anchors(hyper_params)
     frcnn_train_feed = train_utils.faster_rcnn_generator(train_data, anchors, hyper_params)
@@ -60,6 +57,9 @@ def main() -> None:
     frcnn_model = faster_rcnn.get_model(feature_extractor, rpn_model, anchors, hyper_params)
     frcnn_model.compile(
         optimizer=tf.optimizers.Adam(learning_rate=1e-5),
+        # Losses are attached inside the model graph, so Keras still expects one
+        # placeholder entry per output even though the real supervision lives in
+        # `add_loss(...)`.
         loss=[None] * len(frcnn_model.output)
     )
     faster_rcnn.init_model(frcnn_model, hyper_params)

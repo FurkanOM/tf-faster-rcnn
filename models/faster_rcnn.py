@@ -148,6 +148,8 @@ class RoIBBox(Layer):
         rpn_labels = tf.reshape(rpn_labels, (batch_size, total_anchors))
         rpn_bbox_deltas *= variances
         rpn_bboxes = bbox_utils.get_bboxes_from_deltas(self.anchors, rpn_bbox_deltas)
+        # Pre-NMS top-k keeps the expensive suppression step focused on the most
+        # promising proposals instead of all anchors.
         _, pre_indices = tf.nn.top_k(rpn_labels, pre_nms_topn)
         pre_roi_bboxes = tf.gather(rpn_bboxes, pre_indices, batch_dims=1)
         pre_roi_labels = tf.gather(rpn_labels, pre_indices, batch_dims=1)
@@ -160,6 +162,7 @@ class RoIBBox(Layer):
             max_total_size=post_nms_topn,
             iou_threshold=nms_iou_threshold
         )
+        # Proposal generation is treated as fixed routing for the second stage.
         return tf.stop_gradient(roi_bboxes)
 
 
@@ -220,6 +223,8 @@ class RoIDelta(Layer):
         expanded_gt_boxes = tf.where(tf.expand_dims(pos_mask, axis=-1), gt_boxes_map, tf.zeros_like(gt_boxes_map))
         gt_labels_map = tf.gather(gt_labels, max_indices_each_gt_box, batch_dims=1)
         pos_gt_labels = tf.where(pos_mask, gt_labels_map, tf.constant(-1, dtype=tf.int32))
+        # Background RoIs become label 0 so the one-hot targets line up with the
+        # classifier head, while ignored RoIs remain all-zero after one-hot.
         neg_gt_labels = tf.cast(neg_mask, dtype=tf.int32)
         expanded_gt_labels = pos_gt_labels + neg_gt_labels
         roi_bbox_deltas = bbox_utils.get_deltas_from_bboxes(roi_bboxes, expanded_gt_boxes) / variances
@@ -346,6 +351,8 @@ def get_model(
                 frcnn_cls_loss_layer,
             ]
         )
+        # The training model exposes loss tensors as outputs so they can be wired
+        # into Keras without hand-written training loops.
         for layer_name in loss_names:
             layer = frcnn_model.get_layer(layer_name)
             frcnn_model.add_loss(layer.output)
