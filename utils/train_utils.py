@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterator, Tuple
 import tensorflow as tf
 
 from utils import bbox_utils
+import copy
 
 
 HyperParams = Dict[str, Any]
@@ -53,7 +54,7 @@ def get_hyper_params(backbone: str, **kwargs: Any) -> HyperParams:
         if key in hyper_params and value:
             hyper_params[key] = value
     hyper_params["anchor_count"] = len(hyper_params["anchor_ratios"]) * len(hyper_params["anchor_scales"])
-    return hyper_params
+    return copy.deepcopy(hyper_params)
 
 
 def get_step_size(total_items: int, batch_size: int) -> int:
