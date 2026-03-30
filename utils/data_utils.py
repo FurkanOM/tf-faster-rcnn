@@ -166,6 +166,28 @@ def get_custom_imgs(custom_image_path: str) -> List[str]:
     return img_paths
 
 
+def build_custom_dataset(
+    img_paths: Sequence[str],
+    final_height: int,
+    final_width: int
+) -> tf.data.Dataset:
+    """Build a dataset for local images using the project dataset contract.
+
+    Args:
+        img_paths (Sequence[str]): Input image paths.
+        final_height (int): Output image height after resizing.
+        final_width (int): Output image width after resizing.
+
+    Returns:
+        tf.data.Dataset: Dataset yielding resized images and placeholder labels.
+    """
+    return tf.data.Dataset.from_generator(
+        lambda: custom_data_generator(img_paths, final_height, final_width),
+        get_data_types(),
+        get_data_shapes()
+    )
+
+
 def custom_data_generator(
     img_paths: Sequence[str],
     final_height: int,
@@ -218,3 +240,40 @@ def get_padding_values() -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
         and labels.
     """
     return (tf.constant(0, tf.float32), tf.constant(0, tf.float32), tf.constant(-1, tf.int32))
+
+
+def build_dataset(
+    dataset: tf.data.Dataset,
+    final_height: int,
+    final_width: int,
+    batch_size: int,
+    apply_augmentation: bool = False,
+    evaluate: bool = False
+) -> tf.data.Dataset:
+    """Map preprocessing and padding over a dataset split.
+
+    Args:
+        dataset (tf.data.Dataset): Dataset yielding raw TFDS samples.
+        final_height (int): Output image height after resizing.
+        final_width (int): Output image width after resizing.
+        batch_size (int): Number of examples per batch.
+        apply_augmentation (bool): Whether random flipping is enabled.
+        evaluate (bool): Whether difficult annotations should be filtered out.
+
+    Returns:
+        tf.data.Dataset: Preprocessed and padded dataset ready for the model.
+    """
+    dataset = dataset.map(
+        lambda sample: preprocessing(
+            sample,
+            final_height,
+            final_width,
+            apply_augmentation=apply_augmentation,
+            evaluate=evaluate
+        )
+    )
+    return dataset.padded_batch(
+        batch_size,
+        padded_shapes=get_data_shapes(),
+        padding_values=get_padding_values()
+    )

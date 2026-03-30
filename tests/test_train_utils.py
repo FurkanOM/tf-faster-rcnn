@@ -46,6 +46,13 @@ class TrainUtilsTests(unittest.TestCase):
         self.assertEqual(params["total_pos_bboxes"], 64)
         self.assertEqual(params["anchor_count"], 9)
 
+    def test_get_hyper_params_returns_a_copy_of_backbone_defaults(self) -> None:
+        params = self.module.get_hyper_params("vgg16")
+
+        params["img_size"] = 320
+
+        self.assertEqual(self.module.RPN["vgg16"]["img_size"], 500)
+
     def test_get_step_size_rounds_up_for_partial_batches(self) -> None:
         self.assertEqual(self.module.get_step_size(10, 4), 3)
         self.assertEqual(self.module.get_step_size(8, 4), 2)

@@ -44,7 +44,6 @@ def generate_anchors(hyper_params: HyperParams) -> tf.Tensor:
     Returns:
         tf.Tensor: Anchors with shape `(total_anchors, 4)` clipped to `[0, 1]`.
     """
-    anchor_count = hyper_params["anchor_count"]
     feature_map_shape = hyper_params["feature_map_shape"]
     stride = 1 / feature_map_shape
     grid_coords = tf.cast(tf.range(0, feature_map_shape) / feature_map_shape + stride / 2, dtype=tf.float32)

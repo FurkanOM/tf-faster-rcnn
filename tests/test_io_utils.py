@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import types
 import unittest
 from datetime import datetime
 from unittest import mock
@@ -55,6 +56,25 @@ class IoUtilsTests(unittest.TestCase):
         module.is_valid_backbone("mobilenet_v2")
         with self.assertRaises(AssertionError):
             module.is_valid_backbone("resnet50")
+
+    def test_get_rpn_model_builder_returns_backbone_specific_factory(self) -> None:
+        module, _ = import_project_module("utils.io_utils")
+        mobilenet_factory = object()
+        vgg_factory = object()
+        mobilenet_module = types.ModuleType("models.rpn_mobilenet_v2")
+        mobilenet_module.get_model = mobilenet_factory
+        vgg_module = types.ModuleType("models.rpn_vgg16")
+        vgg_module.get_model = vgg_factory
+
+        with mock.patch.dict(
+            "sys.modules",
+            {
+                "models.rpn_mobilenet_v2": mobilenet_module,
+                "models.rpn_vgg16": vgg_module,
+            },
+        ):
+            self.assertIs(module.get_rpn_model_builder("mobilenet_v2"), mobilenet_factory)
+            self.assertIs(module.get_rpn_model_builder("vgg16"), vgg_factory)
 
     def test_handle_gpu_compatibility_enables_memory_growth_for_each_gpu(self) -> None:
         tf_stub = make_tf_stub(gpus=["GPU:0", "GPU:1"])
